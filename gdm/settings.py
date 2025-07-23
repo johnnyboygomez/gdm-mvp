@@ -81,12 +81,27 @@ WSGI_APPLICATION = 'gdm.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'gdm_db',
+        'USER': 'gdm_db_user',
+        'PASSWORD': 'KCQ89BwuOgSmlrV146phRlPgPGWMnCHe',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
+
+
+"""
+OLD SQLITE database
+DATABASES = {
     'default': dj_database_url.config(
         default='sqlite:///db.sqlite3',  # fallback to sqlite if DATABASE_URL isn't set
         conn_max_age=600,
         ssl_require=False  # only set this True when deploying to production
     )
 }
+"""
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
