@@ -11,3 +11,7 @@ services:
       - type: static
         path: /static
         directory: staticfiles
+staticSites:
+  - name: static
+    staticPublishPath: staticfiles
+    urlPath: /static
