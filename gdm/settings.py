@@ -10,12 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-"""
+
 try:
     from .settings_local import *
 except ImportError:
     pass
-"""
+
 
 from pathlib import Path
 
@@ -89,27 +89,11 @@ WSGI_APPLICATION = 'gdm.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'gdm_db',
-        'USER': 'gdm_db_user',
-        'PASSWORD': 'KCQ89BwuOgSmlrV146phRlPgPGWMnCHe',
-        'HOST': 'localhost',
-        'PORT': '5432',
-    }
-}
-
-
-"""
-DATABASES = {
     'default': dj_database_url.config(
-        default='sqlite:///db.sqlite3',  # fallback for local dev
+        default=os.environ.get("DATABASE_URL"),
         conn_max_age=600,
-        conn_health_checks=True,
     )
 }
-"""
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
