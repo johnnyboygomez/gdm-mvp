@@ -13,6 +13,7 @@ class Participant(models.Model):
     targets = models.JSONField(default=dict, blank=True)      # e.g. {"steps": 10000, "calories": 2000}
     
     # Fitbit OAuth tokens etc
+    fitbit_user_id = models.CharField(max_length=100, blank=True, null=True)
     fitbit_access_token = models.TextField(null=True, blank=True)
     fitbit_refresh_token = models.TextField(null=True, blank=True)
     fitbit_token_expires = models.DateTimeField(null=True, blank=True)
