@@ -10,6 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+"""
+try:
+    from .settings_local import *
+except ImportError:
+    pass
+"""
+
 from pathlib import Path
 
 import dj_database_url
@@ -42,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
+    'fitbit_integration',
 ]
 
 MIDDLEWARE = [
@@ -81,12 +89,26 @@ WSGI_APPLICATION = 'gdm.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'gdm_db',
+        'USER': 'gdm_db_user',
+        'PASSWORD': 'KCQ89BwuOgSmlrV146phRlPgPGWMnCHe',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
+
+
+"""
+DATABASES = {
     'default': dj_database_url.config(
         default='sqlite:///db.sqlite3',  # fallback for local dev
         conn_max_age=600,
         conn_health_checks=True,
     )
 }
+"""
 
 
 # Password validation
@@ -133,5 +155,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+FITBIT_REDIRECT_URI = os.getenv("FITBIT_REDIRECT_URI", "http://localhost:8000/fitbit/callback/")
+
+
 
 
