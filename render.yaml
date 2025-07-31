@@ -6,7 +6,7 @@ services:
     startCommand: "gunicorn config.wsgi:application"
     envVars:
       - key: DJANGO_SETTINGS_MODULE
-        value: config.settings
+        value: gdm.settings
       - key: PYTHON_VERSION
         value: 3.11
     autoDeploy: true
