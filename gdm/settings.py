@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-
 try:
     from .settings_local import *
 except ImportError:
@@ -94,6 +93,19 @@ DATABASES = {
         conn_max_age=600,
     )
 }
+"""
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'gdm_db',
+        'USER': 'gdm_db_user',
+        'PASSWORD': 'KCQ89BwuOgSmlrV146phRlPgPGWMnCHe',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
+
+"""
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
