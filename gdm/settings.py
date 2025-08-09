@@ -153,7 +153,8 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 FITBIT_REDIRECT_URI = os.getenv("FITBIT_REDIRECT_URI", "http://localhost:8000/fitbit/callback/")
-
+FITBIT_CLIENT_ID = os.getenv("FITBIT_CLIENT_ID")
+FITBIT_CLIENT_SECRET = os.getenv("FITBIT_CLIENT_SECRET")
 
 
 

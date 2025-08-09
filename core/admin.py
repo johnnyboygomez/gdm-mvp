@@ -3,29 +3,27 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.contrib.auth.models import User
-from .models import Participant
+from django.utils.html import format_html
+from django.urls import path
+from django.urls import reverse
+from django.shortcuts import redirect
+from core.models import Participant
+from fitbit_integration.utils import regenerate_fitbit_token
+from django.utils.html import format_html
 
-# Your existing Participant admin
-@admin.register(Participant)
+
+# Participant admin
 class ParticipantAdmin(admin.ModelAdmin):
-    list_display = ('user', 'email', 'start_date')
-    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('fitbit_auth_token', 'authorize_fitbit_button')
 
-    def email(self, obj):
-        return obj.user.email
+    def authorize_fitbit_button(self, obj):
+        if not obj.pk:
+            return "Save participant to get the Fitbit authorization link."
+        url = reverse('fitbit_integration:authorize_fitbit') + f'?state={obj.fitbit_auth_token}'
+        return format_html('<a class="button" href="{}" target="_blank">Authorize Fitbit</a>', url)
+    authorize_fitbit_button.short_description = "Fetch New Fitbit Access and Refresh Tokens"
 
-class ParticipantAdmin(admin.ModelAdmin):
-    list_display = ('user', 'email', 'start_date')
-    search_fields = ('user__username', 'user__email')
-
-    def email(self, obj):
-        return obj.user.email
-
-    def has_add_permission(self, request):
-        # Return False to hide the "+ Add" button in the Participants admin page
-        # but the menu link remains visible.
-        return False
-
+admin.site.register(Participant, ParticipantAdmin)
 
 
 # Inline to edit Participant info inside User admin

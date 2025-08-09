@@ -2,6 +2,7 @@
 
 from django.contrib.auth.models import User
 from django.db import models
+import uuid
 
 class Participant(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -17,6 +18,7 @@ class Participant(models.Model):
     fitbit_access_token = models.TextField(null=True, blank=True)
     fitbit_refresh_token = models.TextField(null=True, blank=True)
     fitbit_token_expires = models.DateTimeField(null=True, blank=True)
+    fitbit_auth_token = models.UUIDField(default=uuid.uuid4, unique=True)
 
     def __str__(self):
     	return f"{self.user.username} ({self.user.email})"
