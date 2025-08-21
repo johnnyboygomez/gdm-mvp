@@ -5,7 +5,11 @@ from django.db import models
 import uuid
 
 class Participant(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    # OLD
+    # user = models.OneToOneField(User, on_delete=models.CASCADE)
+
+    # NEW
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)    
     start_date = models.DateField()
     email = models.EmailField(unique=True)
     weight = models.FloatField(null=True, blank=True)   # kg or lbs, specify later
@@ -23,3 +27,9 @@ class Participant(models.Model):
     def __str__(self):
     	return f"{self.user.username} ({self.user.email})"
 
+    def save(self, *args, **kwargs):
+        # --- NEW: default email to username if empty ---
+        if not self.email and self.user:
+            self.email = self.user.username
+        # -----------------------------------------------
+        super().save(*args, **kwargs)

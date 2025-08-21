@@ -1,0 +1,32 @@
+/* Initially hide the Permissions fieldset */
+fieldset.module.permissions {
+    display: none;
+    border-left: 3px solid #999;
+    padding-left: 10px;
+    margin-bottom: 10px;
+}
+
+/* Toggle button style */
+#toggle-permissions {
+    cursor: pointer;
+    color: #007bff;
+    margin-bottom: 10px;
+    display: inline-block;
+}
+
+.toggle-link {
+    display: block;       /* makes each toggle appear on its own line */
+    color: cadetblue !important;
+    margin: 2px 0;
+    font-weight: bold;
+    width: 100%;
+}
+
+div.readonly {
+    max-height: 100px; /* adjust as needed */
+    max-width: 70%;
+    overflow: auto;    /* vertical scroll */
+    white-space: pre-wrap;  /* wrap long lines */
+    word-wrap: break-word;  /* wrap long words */
+    padding: 5px;           /* optional: nicer padding */
+}

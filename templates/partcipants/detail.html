@@ -1,0 +1,15 @@
+<!-- templates/participants/detail.html -->
+
+<h1>{{ participant.name }}</h1>
+
+<p><strong>Fsdfgsdfgserdrfgitbit Auth Token:</strong> {{ participant.auth_token }}</p>
+
+<a href="{{ fitbit_link }}" class="btn btn-primary">
+    Authorize Fitbit
+</a>
+<form method="post" action="{% url 'regenerate_token' participant.id %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-warning" onclick="return confirm('Are you sure you want to regenerate this participant’s token?')">
+        Regenerate Fitbit Auth Token
+    </button>
+</form>

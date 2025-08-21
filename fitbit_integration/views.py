@@ -31,8 +31,9 @@ def authorize_fitbit(request):
         "response_type": "code",
         "client_id": client_id,
         "redirect_uri": redirect_uri,
-        "scope": "activity heartrate location nutrition profile settings sleep social weight",
+        "scope": "activity heartrate profile",
         "state": state,
+        "prompt": "login", 
     }
 
     auth_url = "https://www.fitbit.com/oauth2/authorize?" + urllib.parse.urlencode(params)
@@ -79,9 +80,26 @@ def fitbit_callback(request):
 
     token_data = response.json()
 
+    # ---- NEW SECTION: Get Fitbit profile to verify fitbit_user_id ----
+    access_token = token_data.get("access_token")
+    profile_response = requests.get(
+        "https://api.fitbit.com/1/user/-/profile.json",
+        headers={"Authorization": f"Bearer {access_token}"}
+    )
+
+    if profile_response.status_code != 200:
+        return JsonResponse({"error": "Failed to fetch Fitbit profile", "details": profile_response.text}, status=400)
+
+    profile_data = profile_response.json()
+    fitbit_user_id = profile_data.get("user", {}).get("encodedId")
+
+    if not fitbit_user_id:
+        return JsonResponse({"error": "Could not retrieve Fitbit user_id"}, status=400)
+        
     # Save tokens to participant
     participant.fitbit_access_token = token_data.get("access_token")
     participant.fitbit_refresh_token = token_data.get("refresh_token")
+    participant.fitbit_user_id = token_data.get("user_id")
     expires_in = token_data.get("expires_in")  # usually seconds
     if expires_in:
         participant.fitbit_token_expires = datetime.utcnow() + timedelta(seconds=expires_in)
