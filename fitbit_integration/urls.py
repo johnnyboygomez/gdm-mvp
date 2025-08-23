@@ -10,4 +10,3 @@ urlpatterns = [
     path('callback/', views.fitbit_callback, name='fitbit_callback'),
     path('', views.index, name='fitbit_home'),
 ]
-	

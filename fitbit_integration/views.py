@@ -95,7 +95,7 @@ def fitbit_callback(request):
 
     if not fitbit_user_id:
         return JsonResponse({"error": "Could not retrieve Fitbit user_id"}, status=400)
-        
+        	
     # Save tokens to participant
     participant.fitbit_access_token = token_data.get("access_token")
     participant.fitbit_refresh_token = token_data.get("refresh_token")

@@ -37,6 +37,11 @@ class ParticipantAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.fetch_fitbit_data),
                 name='fetch_fitbit_data',
             ),
+            path(
+                'show-weekly-data/<int:participant_id>/',
+                self.admin_site.admin_view(self.show_weekly_data),
+                name='show_weekly_data',
+            ),
         ]
         return custom_urls + urls
 
@@ -79,6 +84,15 @@ class ParticipantAdmin(admin.ModelAdmin):
 
         return JsonResponse(filtered_steps, safe=False)
        ####return JsonResponse(data, safe=False)
+    def show_weekly_data(self, request, participant_id):
+        participant = get_object_or_404(Participant, pk=participant_id)
+
+        # For now, just return whatever is in daily_steps
+        if not participant.daily_steps:
+            return JsonResponse({"error": "No daily_steps data found"}, status=404)
+
+        return JsonResponse(participant.daily_steps, safe=False)
+
 
 # Register Participant so reverse('admin:core_participant_change') works
 admin.site.register(Participant, ParticipantAdmin)
@@ -102,6 +116,7 @@ class ParticipantInline(admin.StackedInline):
         'targets',
         'authorize_fitbit_button',
         'fetch_fitbit_data_button',
+        'show_weekly_data_button', 
     )
 
     fields = (
@@ -120,6 +135,7 @@ class ParticipantInline(admin.StackedInline):
         'fitbit_token_expires',
         'authorize_fitbit_button',
         'fetch_fitbit_data_button',
+        'show_weekly_data_button', 
     )
 
     def get_extra(self, request, obj=None, **kwargs):
@@ -153,6 +169,17 @@ class ParticipantInline(admin.StackedInline):
             '<a class="button" href="{}" target="_blank">Fetch Fitbit Data</a>', url)
 
     fetch_fitbit_data_button.short_description = "Fetch Fitbit Data"
+
+    def show_weekly_data_button(self, obj):
+        if not obj.pk:
+            return "Save participant first to show weekly data."
+        
+        url = reverse('admin:show_weekly_data', args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}" target="_blank">Show Weekly Data</a>', url)
+
+    show_weekly_data_button.short_description = "Show Weekly Data"
+
 
 ###############
 # Custom User Admin
