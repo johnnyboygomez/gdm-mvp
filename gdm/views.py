@@ -1,4 +1,5 @@
 # gdm/views.py
+
 from django.shortcuts import render, get_object_or_404
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse
@@ -46,7 +47,7 @@ def google_oauth_start(request, participant_id: int):
     auth_url, flow_state = flow.authorization_url(
         access_type="offline",              # get refresh_token if/when needed
         include_granted_scopes="true",
-        prompt="select_account",            # always let RA pick account
+        prompt="consent select_account",            # always let RA pick account
         state=state,                        # our signed participant state
     )
 
@@ -94,15 +95,27 @@ def google_oauth_callback(request):
         google_requests.Request(),
         settings.GOOGLE_CLIENT_ID,
     )
-
+    
     # Persist the essentials you want to track
     participant.google_id = idinfo.get("sub")
     participant.google_email = idinfo.get("email")
-    # Optionally store tokens if your use case needs it (be mindful of PHI/PII policies):
-    # participant.google_access_token = creds.token
-    # participant.google_refresh_token = creds.refresh_token  # may be None on re-consent
-    # participant.google_token_expiry = creds.expiry
+    participant.google_access_token = creds.token
+    participant.google_refresh_token = creds.refresh_token  # may be None on re-consent
+    participant.google_token_expiry = creds.expiry
     participant.save()
+''' 
+     # return full credentials and idinfo as JSON ---- for debugging
+    return JsonResponse({
+        "credentials": {
+            "token": creds.token,
+            "refresh_token": creds.refresh_token,
+            "id_token": creds.id_token,
+            "scopes": creds.scopes,
+            "expiry": creds.expiry.isoformat() if creds.expiry else None,
+        },
+        "idinfo": idinfo,
+    })
+'''
 
     # Simple confirmation; you can redirect back to the admin change page if you prefer
     messages.success(request, "Google authorization successful.")

@@ -27,6 +27,10 @@ class Participant(models.Model):
     #Google stuff
     google_id = models.CharField(max_length=255, blank=True, null=True)
     google_email = models.EmailField(blank=True, null=True)
+    
+    google_access_token = models.TextField(blank=True, null=True)
+    google_refresh_token = models.TextField(blank=True, null=True)
+    google_token_expiry = models.DateTimeField(blank=True, null=True)
 
 
     def __str__(self):

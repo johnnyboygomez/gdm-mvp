@@ -94,19 +94,6 @@ DATABASES = {
         conn_max_age=600,
     )
 }
-"""
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'gdm_db',
-        'USER': 'gdm_db_user',
-        'PASSWORD': 'KCQ89BwuOgSmlrV146phRlPgPGWMnCHe',
-        'HOST': 'localhost',
-        'PORT': '5432',
-    }
-}
-
-"""
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -158,8 +145,8 @@ FITBIT_CLIENT_ID = os.getenv("FITBIT_CLIENT_ID")
 FITBIT_CLIENT_SECRET = os.getenv("FITBIT_CLIENT_SECRET")
 
 # Google OAuth credentials
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", GOOGLE_CLIENT_ID)
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", GOOGLE_CLIENT_SECRET)
 # Optional but tidy: single place to compute redirect
 # (we’ll override at runtime using request.build_absolute_uri)
 GOOGLE_REDIRECT_PATH = "/google/callback/"
