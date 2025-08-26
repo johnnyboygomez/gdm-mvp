@@ -23,6 +23,11 @@ class Participant(models.Model):
     fitbit_refresh_token = models.TextField(null=True, blank=True)
     fitbit_token_expires = models.DateTimeField(null=True, blank=True)
     fitbit_auth_token = models.UUIDField(default=uuid.uuid4, unique=True)
+    
+    #Google stuff
+    google_id = models.CharField(max_length=255, blank=True, null=True)
+    google_email = models.EmailField(blank=True, null=True)
+
 
     def __str__(self):
     	return f"{self.user.username} ({self.user.email})"

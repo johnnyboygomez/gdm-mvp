@@ -11,6 +11,8 @@ import requests
 from core.models import Participant
 from fitbit_integration.utils import regenerate_fitbit_token
 from datetime import date, timedelta
+from django.conf import settings
+
 
 ###############
 # Participant Admin
@@ -117,6 +119,9 @@ class ParticipantInline(admin.StackedInline):
         'authorize_fitbit_button',
         'fetch_fitbit_data_button',
         'show_weekly_data_button', 
+        'google_id',
+        'google_email',
+        'authorize_google_button',
     )
 
     fields = (
@@ -135,7 +140,8 @@ class ParticipantInline(admin.StackedInline):
         'fitbit_token_expires',
         'authorize_fitbit_button',
         'fetch_fitbit_data_button',
-        'show_weekly_data_button', 
+        'show_weekly_data_button',
+        'authorize_google_button', 
     )
 
     def get_extra(self, request, obj=None, **kwargs):
@@ -169,6 +175,15 @@ class ParticipantInline(admin.StackedInline):
             '<a class="button" href="{}" target="_blank">Fetch Fitbit Data</a>', url)
 
     fetch_fitbit_data_button.short_description = "Fetch Fitbit Data"
+
+    def authorize_google_button(self, obj):
+        if not obj.pk:
+            return "Save participant first to authorize Google."
+        url = reverse('google_oauth_start', args=[obj.pk])
+        return format_html('<a class="button" href="{}">Authorize Google</a>', url)
+
+    authorize_google_button.short_description = "Authorize Google Sign-In"
+
 
     def show_weekly_data_button(self, obj):
         if not obj.pk:

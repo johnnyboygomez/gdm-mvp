@@ -13,7 +13,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.urls import reverse
 import uuid
 from .utils import regenerate_fitbit_token
-
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 @csrf_exempt
 
@@ -126,3 +127,4 @@ def regenerate_token(request, participant_id):
         return HttpResponse(f"New token: {new_token}")
     except Participant.DoesNotExist:
         return HttpResponse("Participant not found", status=404)
+

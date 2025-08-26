@@ -157,5 +157,9 @@ FITBIT_REDIRECT_URI = os.getenv("FITBIT_REDIRECT_URI", "http://localhost:8000/fi
 FITBIT_CLIENT_ID = os.getenv("FITBIT_CLIENT_ID")
 FITBIT_CLIENT_SECRET = os.getenv("FITBIT_CLIENT_SECRET")
 
-
-
+# Google OAuth credentials
+GOOGLE_CLIENT_ID = 'GOOGLE_CLIENT_ID_PLACEHOLDER'
+GOOGLE_CLIENT_SECRET = 'GOOGLE_CLIENT_SECRET_PLACEHOLDER'
+# Optional but tidy: single place to compute redirect
+# (we’ll override at runtime using request.build_absolute_uri)
+GOOGLE_REDIRECT_PATH = "/google/callback/"

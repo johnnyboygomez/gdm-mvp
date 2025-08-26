@@ -1,0 +1,109 @@
+# gdm/views.py
+from django.shortcuts import render, get_object_or_404
+from django.shortcuts import redirect, get_object_or_404
+from django.urls import reverse
+from django.core import signing
+from django.http import JsonResponse
+from core.models import Participant
+from django.conf import settings
+from google.auth.transport import requests as google_requests
+from google_auth_oauthlib.flow import Flow
+from google.oauth2 import id_token as google_id_token
+from django.contrib import messages
+
+
+OAUTH_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
+
+def _build_redirect_uri(request):
+    # Ensures exact match with what you register in Google Console
+    return request.build_absolute_uri(reverse('google_oauth_callback'))
+
+def google_oauth_start(request, participant_id: int):
+    """Kick off the server-side OAuth flow (Auth Code)."""
+    participant = get_object_or_404(Participant, pk=participant_id)
+
+    # Sign state so we can safely round-trip participant identification
+    state_payload = {"pid": participant_id}
+    state = signing.dumps(state_payload)
+
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=OAUTH_SCOPES,
+        redirect_uri=_build_redirect_uri(request),
+    )
+
+    auth_url, flow_state = flow.authorization_url(
+        access_type="offline",              # get refresh_token if/when needed
+        include_granted_scopes="true",
+        prompt="select_account",            # always let RA pick account
+        state=state,                        # our signed participant state
+    )
+
+    # Store Google’s internal state to satisfy library checks on callback
+    request.session['google_oauthlib_state'] = flow_state
+    return redirect(auth_url)
+
+def google_oauth_callback(request):
+    """Handle Google's redirect, exchange code → tokens, save to participant."""
+    # Validate state
+    state = request.GET.get("state")
+    if not state:
+        return HttpResponseBadRequest("Missing state")
+
+    try:
+        data = signing.loads(state, max_age=600)  # 10 minutes
+        participant_id = int(data["pid"])
+    except Exception:
+        return HttpResponseBadRequest("Invalid/expired state")
+
+    participant = get_object_or_404(Participant, pk=participant_id)
+
+    # Recreate the flow to exchange code for tokens
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        },
+        scopes=OAUTH_SCOPES,
+        redirect_uri=_build_redirect_uri(request),
+        state=request.session.get('google_oauthlib_state'),
+    )
+
+    # Exchange the 'code' in the current full URL
+    flow.fetch_token(authorization_response=request.build_absolute_uri())
+    creds = flow.credentials  # contains access_token, id_token, refresh_token (maybe), expiry
+
+    # Verify id_token → get Google subject + email
+    idinfo = google_id_token.verify_oauth2_token(
+        creds.id_token,
+        google_requests.Request(),
+        settings.GOOGLE_CLIENT_ID,
+    )
+
+    # Persist the essentials you want to track
+    participant.google_id = idinfo.get("sub")
+    participant.google_email = idinfo.get("email")
+    # Optionally store tokens if your use case needs it (be mindful of PHI/PII policies):
+    # participant.google_access_token = creds.token
+    # participant.google_refresh_token = creds.refresh_token  # may be None on re-consent
+    # participant.google_token_expiry = creds.expiry
+    participant.save()
+
+    # Simple confirmation; you can redirect back to the admin change page if you prefer
+    messages.success(request, "Google authorization successful.")
+    return redirect(reverse('admin:auth_user_change', args=[participant.user_id]))
