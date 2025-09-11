@@ -167,12 +167,20 @@ class CustomUserAdmin(DefaultUserAdmin):
         # Check if user is in Managers group (but not superuser)
         if (request.user.groups.filter(name='Managers').exists() and 
             not request.user.is_superuser):
-            # Return only basic user info (username/password) for Managers
-            return (
-                (None, {
-                    'fields': ('username', 'password')
-                }),
-            )
+            
+            # Different fieldsets for adding vs changing users
+            if obj is None:  # Adding new user
+                return (
+                    (None, {
+                        'fields': ('username', 'password1', 'password2')
+                    }),
+                )
+            else:  # Editing existing user
+                return (
+                    (None, {
+                        'fields': ('username', 'password')
+                    }),
+                )
         
         # Return full fieldsets for superusers
         return fieldsets
