@@ -26,6 +26,9 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+DEFAULT_DEVICE_TYPE = 'fitbit'
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
@@ -42,13 +45,13 @@ ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
-#    'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
-    'fitbit_integration',
+    'goals',
+    'device_integration',
     'auth_app.CustomAuthConfig',
 ]
 
@@ -144,9 +147,3 @@ FITBIT_REDIRECT_URI = os.getenv("FITBIT_REDIRECT_URI", "http://localhost:8000/fi
 FITBIT_CLIENT_ID = os.getenv("FITBIT_CLIENT_ID")
 FITBIT_CLIENT_SECRET = os.getenv("FITBIT_CLIENT_SECRET")
 
-# Google OAuth credentials
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", GOOGLE_CLIENT_ID)
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", GOOGLE_CLIENT_SECRET)
-# Optional but tidy: single place to compute redirect
-# (we’ll override at runtime using request.build_absolute_uri)
-GOOGLE_REDIRECT_PATH = "/google/callback/"

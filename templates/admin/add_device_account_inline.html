@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<h1>Add Device for {{ participant.user.username }}</h1>
+
+<form method="post">{% csrf_token %}
+  {{ form.as_p }}
+  <input type="submit" value="Add Device" class="default">
+</form>
+
+<a href="{% url 'admin:auth_user_change' participant.id %}">Back to participant</a>
+{% endblock %}

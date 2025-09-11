@@ -9,7 +9,6 @@ from django.conf import settings
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from core.models import Participant
-from core.models import Participant
 
 ###############
 # State / token helpers
@@ -129,43 +128,55 @@ def exchange_code_for_tokens(code, state):
 def fetch_fitbit_data_for_participant(participant_id):
     print(f"--- Starting fetch for participant {participant_id} ---")
     
-    participant = get_object_or_404(Participant, pk=participant_id)
-    print(f"Found participant: {participant}")
+    try: 
+        participant = get_object_or_404(Participant, pk=participant_id)
+        if not participant.fitbit_access_token:
+            return {"error": "No Fitbit access token found"}, 400
+        
+        print(f"Found participant: {participant}")
 
-    # Refresh token if needed
-    if participant.fitbit_token_expires and participant.fitbit_token_expires > timezone.now():
-        access_token = participant.fitbit_access_token
-        print(f"Access token still valid: {access_token[:10]}... (truncated)")
-    else:
-        print("Access token expired, refreshing...")
-        try:
-            access_token = refresh_fitbit_tokens(participant)
-            print(f"New access token obtained: {access_token[:10]}... (truncated)")
-        except Exception as e:
-            print(f"Error refreshing token: {e}")
-            return {"error": str(e)}, 400
+        # Refresh token if needed
+        if participant.fitbit_token_expires and participant.fitbit_token_expires > timezone.now():
+            access_token = participant.fitbit_access_token
+            print(f"Access token still valid: {access_token[:10]}... (truncated)")
+        else:
+            print("Access token expired, refreshing...")
+            try:
+                access_token = refresh_fitbit_tokens(participant)
+                print(f"New access token obtained: {access_token[:10]}... (truncated)")
+            except Exception as e:
+                print(f"Error refreshing token: {e}")
+                return {"error": str(e)}, 400
 
-    # Fetch steps
-    start_date = participant.start_date
-    end_date = start_date + timedelta(days=1095)
-    url = f"https://api.fitbit.com/1/user/-/activities/steps/date/{start_date}/{end_date}.json"
-    headers = {"Authorization": f"Bearer {access_token}"}
-    print(f"Fetching Fitbit data from: {url}")
+        # Fetch steps
+        start_date = participant.start_date
+        end_date = start_date + timedelta(days=1095)
+        url = f"https://api.fitbit.com/1/user/-/activities/steps/date/{start_date}/{end_date}.json"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        print(f"Fetching Fitbit data from: {url}")
 
-    resp = requests.get(url, headers=headers)
-    if resp.status_code != 200:
-        print(f"Fitbit API returned error {resp.status_code}: {resp.text}")
-        return {"error": resp.text}, resp.status_code
+        resp = requests.get(url, headers=headers)
+        if resp.status_code != 200:
+            print(f"Fitbit API returned error {resp.status_code}: {resp.text}")
+            return {"error": resp.text}, resp.status_code
 
-    steps = resp.json().get("activities-steps", [])
-    filtered_steps = [day for day in steps if int(day.get("value", 0)) > 0]  # filter out zero values
-    print(f"Fetched {len(filtered_steps)} days of steps (non-zero only)")
+        steps = resp.json().get("activities-steps", [])
+        filtered_steps = [day for day in steps if int(day.get("value", 0)) > 0]  # filter out zero values
+        print(f"Fetched {len(filtered_steps)} days of steps (non-zero only)")
 
-    participant.daily_steps = filtered_steps
-    participant.save(update_fields=["daily_steps"])
-    print("Participant.daily_steps updated successfully.")
+        participant.daily_steps = filtered_steps
+        participant.save(update_fields=["daily_steps"])
+        print("Participant.daily_steps updated successfully.")
 
-    return {"steps": filtered_steps}, 200
+        return {"steps": filtered_steps}, 200
+
+    except requests.RequestException as e:
+        logging.error(f"Fitbit API request failed: {e}")
+        return {"error": "Failed to fetch data from Fitbit"}, 500
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return {"error": "Internal server error"}, 500
+
 
 ###############
 # Add a device account

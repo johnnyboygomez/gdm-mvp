@@ -20,9 +20,22 @@ def validate_step_data(average_steps):
         
     return True
 
+def _parse_increase_value(increase_str):
+    """Convert increase string to comparable value for matrix logic"""
+    if increase_str == "maintain":
+        return 0
+    elif increase_str == "increase to 10000":
+        return "increase to 10000"
+    else:
+        try:
+            return int(increase_str)
+        except (ValueError, TypeError):
+            return 0
+
 def calculate_step_increase(current_avg, last_goal_data=None, target_was_met=True):
     """
-    Calculate the appropriate step increase based on current average and performance.
+    Calculate the appropriate step increase based on current average, previous increase, and performance.
+    Translated from PHP research algorithm.
     
     Args:
         current_avg: Current week's average steps
@@ -35,19 +48,22 @@ def calculate_step_increase(current_avg, last_goal_data=None, target_was_met=Tru
     
     # Validate input
     if not validate_step_data(current_avg):
-        current_avg = max(1000, min(current_avg, 50000))  # Clamp to reasonable range
+        current_avg = max(1000, min(current_avg, 50000))
     
-    current_avg = int(current_avg)  # Ensure integer
+    current_avg = int(current_avg)
     
     # First week logic (no previous goal)
     if not last_goal_data:
         return _calculate_first_week_target(current_avg)
     
-    # Subsequent weeks - consider performance
+    # Get previous increase for matrix logic
+    previous_increase = _parse_increase_value(last_goal_data.get("increase"))
+    
+    # Subsequent weeks - use matrix logic from PHP
     if target_was_met:
-        return _calculate_target_met(current_avg)
+        return _calculate_target_met_matrix(current_avg, previous_increase)
     else:
-        return _calculate_target_missed(current_avg)
+        return _calculate_target_missed_matrix(current_avg, previous_increase)
 
 def _calculate_first_week_target(current_avg):
     """Calculate target for first week"""
@@ -62,31 +78,95 @@ def _calculate_first_week_target(current_avg):
     else:
         return "maintain", current_avg
 
-def _calculate_target_met(current_avg):
-    """Calculate target when previous goal was met"""
-    if current_avg >= 10000:
-        return "maintain", current_avg
-    elif current_avg < 5000:
-        return "500", current_avg + 500
+def _calculate_target_met_matrix(current_avg, previous_increase):
+    """Target met logic - direct translation from PHP algorithm"""
+    
+    # Matrix logic for when target was met
+    if current_avg < 5000:
+        if previous_increase == 250:
+            return "500", current_avg + 500
+        elif previous_increase == 500:
+            return "500", current_avg + 500
+    
     elif current_avg < 7500:
-        return "1000", current_avg + 1000
+        if previous_increase == 250:
+            return "500", current_avg + 500
+        elif previous_increase == 500:
+            return "1000", current_avg + 1000
+        elif previous_increase == 1000:
+            return "1000", current_avg + 1000
+    
     elif current_avg < 9000:
-        return "1000", current_avg + 1000
-    else:  # 9000–9999
-        return "500", current_avg + 500
+        if previous_increase == 250:
+            return "1000", current_avg + 1000
+        elif previous_increase == 500:
+            return "1000", current_avg + 1000
+        elif previous_increase == 1000:
+            return "1000", current_avg + 1000
+    
+    elif current_avg < 10000:
+        if previous_increase == 250:
+            return "500", current_avg + 500
+        elif previous_increase == 500:
+            return "500", current_avg + 500
+        elif previous_increase == 1000:
+            return "500", current_avg + 500
+    
+    elif current_avg >= 10000:
+        return "maintain", current_avg
+    
+    # Fallback (shouldn't reach here with proper data)
+    return "500", current_avg + 500
 
-def _calculate_target_missed(current_avg):
-    """Calculate target when previous goal was missed (more conservative)"""
-    if current_avg >= 10000:
-        return "maintain", current_avg
-    elif current_avg < 5000:
-        return "250", current_avg + 250
+def _calculate_target_missed_matrix(current_avg, previous_increase):
+    """Target missed logic - direct translation from PHP algorithm"""
+    
+    # Special case: if previous was maintain, return 1000
+    if previous_increase == 0:  # "maintain" parsed as 0
+        return "1000", current_avg + 1000
+    
+    # Matrix logic for when target was missed
+    if current_avg < 5000:
+        if previous_increase == 250:
+            return "250", current_avg + 250
+        elif previous_increase == 500:
+            return "250", current_avg + 250
+        elif previous_increase == 1000:
+            return "500", current_avg + 500
+        elif previous_increase == "increase to 10000":
+            return "1000", current_avg + 1000
+    
     elif current_avg < 7500:
-        return "500", current_avg + 500
+        if previous_increase == 250:
+            return "250", current_avg + 250
+        elif previous_increase == 500:
+            return "500", current_avg + 500
+        elif previous_increase == 1000:
+            return "500", current_avg + 500
+        elif previous_increase == "increase to 10000":
+            return "1000", current_avg + 1000
+    
     elif current_avg < 9000:
-        return "500", current_avg + 500
-    else:  # 9000–9999
-        return "increase to 10000", 10000
+        if previous_increase == 500:
+            return "500", current_avg + 500
+        elif previous_increase == 1000:
+            return "500", current_avg + 500
+        elif previous_increase == "increase to 10000":
+            return "1000", current_avg + 1000
+    
+    elif current_avg < 10000:
+        if previous_increase == 500:
+            return "500", current_avg + 500
+        elif previous_increase == 1000:
+            return "250", current_avg + 250
+        elif previous_increase == "increase to 10000":
+            return "increase to 10000", 10000
+    
+    elif current_avg >= 10000:
+        return "maintain", current_avg
+    
+    # Fallback (shouldn't reach here with proper data)
+    return "250", current_avg + 250
 
 def compute_weekly_target(participant, average_steps, week_start, week_end, last_goal_data=None):
     """
@@ -144,9 +224,6 @@ def get_step_data_for_week(daily_steps, week_start, week_end):
     Returns:
         list: Valid step values for the week
     """
-    week_steps = []
-    
-def get_step_data_for_week(daily_steps, week_start, week_end):
     week_steps = []
     
     for step_entry in daily_steps:
@@ -251,7 +328,6 @@ def run_weekly_algorithm(participant):
             return None
 
     # Save to participant.targets JSON
-    target_week_key = target_week_start.strftime("%Y-%m-%d")
     targets[target_week_key] = {
         "increase": goal_data["increase"],
         "average_steps": goal_data["average_steps"],
