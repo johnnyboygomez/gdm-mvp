@@ -1,14 +1,14 @@
-# core/admin.py
 from django.contrib import admin
-from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.utils.html import format_html, format_html_join
 from device_integration.fitbit import fetch_fitbit_data_for_participant
-from core.models import Participant
+from core.models import Participant, CustomUser
 from django.urls import reverse
 from django.utils import timezone
 import json
 
+# Import your custom forms
+from .forms import CustomUserCreationForm, CustomUserChangeForm
 
 ###############
 # Mixin with shared button methods
@@ -49,6 +49,8 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
     max_num = 1
     min_num = 1
 
+    readonly_fields = ['daily_steps_display', 'targets_display'] 
+    
     def render_json(self, value):
         """Format JSON data into readable HTML lists"""
         if not value:
@@ -75,12 +77,9 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
         return value
 
     def get_fields(self, request, obj=None):
-        """Customize visible fields based on user permissions"""
+        # Customize visible fields based on user permissions
         base_fields = [
             'start_date',
-            'email',
-            #'weight',
-            #'height',
         ]
         
         # Data fields - different for Managers vs Superusers
@@ -99,94 +98,106 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
             'fitbit_token_expires',
             'fitbit_auth_token',
             'device_type',
-            'fetch_fitbit_data_button',
-            'authenticate_fitbit_button',
-            'calculate_weekly_goals_button',
         ]
         
         return base_fields + data_fields + tech_fields
 
-    def get_readonly_fields(self, request, obj=None):
-        """Set readonly fields based on user permissions"""
-        self.request = request
-        print(f"User: {self.request.user}")
-        base_readonly = [
-            'fitbit_user_id', 'fitbit_access_token', 'fitbit_refresh_token',
-            'fitbit_token_expires', 'fitbit_auth_token', 'device_type',
-            'fetch_fitbit_data_button', 'authenticate_fitbit_button',
-            'calculate_weekly_goals_button'
-        ]
-
-        if request.user.groups.filter(name="Managers").exists() and not request.user.is_superuser:
-            # Managers: display methods are readonly
-            return base_readonly + ['daily_steps_display', 'targets_display']
-        else:
-            # Superusers: technical fields are readonly, data fields are editable
-            return base_readonly
-
     def daily_steps_display(self, obj):
         """Display formatted daily steps for Managers"""
-        print(f"=== DAILY STEPS DISPLAY DEBUG ===")
-        print(f"Has request: {hasattr(self, 'request')}")
-        if hasattr(self, 'request'):
-            print(f"User: {self.request.user}")
-            print(f"Is in Managers group: {self.request.user.groups.filter(name='Managers').exists()}")
-            print(f"Is superuser: {self.request.user.is_superuser}")
-        
         if getattr(self, 'request', None) and self.request.user.groups.filter(name="Managers").exists() \
         and not self.request.user.is_superuser:
-            print("Formatting JSON for Manager")
             formatted = self.render_json(obj.daily_steps)
-            print(f"Formatted result: {formatted}")
             return format_html("<ul style='margin:0 0 0 1em;'>{}</ul>", formatted)
         else:
-            print("Returning raw JSON")
             return obj.daily_steps
 
     def targets_display(self, obj):
         """Display formatted targets for Managers"""
-        print(f"=== TARGETS DISPLAY DEBUG ===")
         if getattr(self, 'request', None) and self.request.user.groups.filter(name="Managers").exists() \
         and not self.request.user.is_superuser:
-            print("Formatting JSON for Manager")
             formatted = self.render_json(obj.targets)
             return format_html("<ul style='margin:0 0 0 1em;'>{}</ul>", formatted)
         else:
-            print("Returning raw JSON")
             return obj.targets
 
 ###############
 # Custom User Admin
 class CustomUserAdmin(DefaultUserAdmin):
+    add_form = CustomUserCreationForm
+    form = CustomUserChangeForm
+    model = CustomUser
+
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal info', {'fields': ('first_name', 'last_name')}),
+        ('Permissions', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
+        }),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+    )
+    
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'first_name', 'last_name', 'password1', 'password2', 'is_staff', 'is_active'),
+        }),
+    )
+    
+    ordering = ('email',)
+    list_display = ('email', 'first_name', 'last_name', 'participant_email', 'participant_start_date', 'is_active', 'is_staff')
+    list_filter = ('is_active', 'is_staff', 'is_superuser', 'groups', 'participant__start_date', 'participant__device_type')
+    search_fields = ('email', 'first_name', 'last_name')
     inlines = [ParticipantInline]
 
-    def get_fieldsets(self, request, obj=None):
-        """Customize fieldsets based on user permissions"""
-        fieldsets = super().get_fieldsets(request, obj)
-        
-        # Check if user is in Managers group (but not superuser)
-        if (request.user.groups.filter(name='Managers').exists() and 
-            not request.user.is_superuser):
-            
-            # Different fieldsets for adding vs changing users
-            if obj is None:  # Adding new user
-                return (
-                    (None, {
-                        'fields': ('username', 'password1', 'password2')
-                    }),
-                )
-            else:  # Editing existing user
-                return (
-                    (None, {
-                        'fields': ('username', 'password')
-                    }),
-                )
-        
-        # Return full fieldsets for superusers
-        return fieldsets
+    def participant_email(self, obj):
+        try:
+            return obj.participant.email
+        except:
+            return "-"
+    participant_email.short_description = "Participant Email"
+    
+    def participant_start_date(self, obj):
+        try:
+            return obj.participant.start_date
+        except:
+            return "-"
+    participant_start_date.short_description = "Study Start Date"
 
+    def get_fieldsets(self, request, obj=None):
+    # For the add form (obj is None), always use add_fieldsets
+        if obj is None:
+            if request.user.groups.filter(name='Managers').exists() and not request.user.is_superuser:
+                return (
+                    (None, {
+                        'classes': ('wide',),
+                        'fields': ('email', 'password1', 'password2', 'is_active'),
+                    }),
+                )
+            return self.add_fieldsets
+
+        # For editing, Managers: email + password only
+        if request.user.groups.filter(name='Managers').exists() and not request.user.is_superuser:
+            return (
+                (None, {
+                    'fields': ('email', 'password'),
+                }),
+            )
+
+        # Superusers and others: full fieldsets
+        return self.fieldsets
+    
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        Use CustomUserCreationForm when adding, CustomUserChangeForm when editing.
+        """
+        defaults = {}
+        if obj is None:
+            defaults['form'] = self.add_form
+        else:
+            defaults['form'] = self.form
+        defaults.update(kwargs)
+        return super().get_form(request, obj, **defaults)
 
 ###############
 # Register the custom User admin
-admin.site.unregister(User)
-admin.site.register(User, CustomUserAdmin)
+admin.site.register(CustomUser, CustomUserAdmin)
