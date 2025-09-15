@@ -42,6 +42,8 @@ class ParticipantButtonMixin:
 
 ###############
 # Inline for Participant
+###############
+# Inline for Participant
 class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
     model = Participant
     can_delete = False
@@ -49,8 +51,19 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
     max_num = 1
     min_num = 1
 
-    readonly_fields = ['daily_steps_display', 'targets_display'] 
+    readonly_fields = [
+        'daily_steps_display',
+        'targets_display',
+        'authenticate_fitbit_button',
+        'fetch_fitbit_data_button',
+        'calculate_weekly_goals_button',
+    ]
     
+    def get_readonly_fields(self, request, obj=None):
+        # Save the request object for use in display methods
+        self.request = request
+        return super().get_readonly_fields(request, obj)
+
     def render_json(self, value):
         """Format JSON data into readable HTML lists"""
         if not value:
@@ -100,7 +113,12 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
             'device_type',
         ]
         
-        return base_fields + data_fields + tech_fields
+        button_fields = [
+            'authenticate_fitbit_button',
+            'fetch_fitbit_data_button',
+            'calculate_weekly_goals_button',
+        ]
+        return base_fields + data_fields + button_fields + tech_fields
 
     def daily_steps_display(self, obj):
         """Display formatted daily steps for Managers"""
@@ -144,8 +162,8 @@ class CustomUserAdmin(DefaultUserAdmin):
     )
     
     ordering = ('email',)
-    list_display = ('email', 'first_name', 'last_name', 'participant_email', 'participant_start_date', 'is_active', 'is_staff')
-    list_filter = ('is_active', 'is_staff', 'is_superuser', 'groups', 'participant__start_date', 'participant__device_type')
+    list_display = ('email', 'participant_start_date', 'is_active', 'is_staff')
+    list_filter = ('is_active', 'is_staff', 'is_superuser', 'participant__start_date', 'participant__device_type')
     search_fields = ('email', 'first_name', 'last_name')
     inlines = [ParticipantInline]
 
@@ -154,14 +172,14 @@ class CustomUserAdmin(DefaultUserAdmin):
             return obj.participant.email
         except:
             return "-"
-    participant_email.short_description = "Participant Email"
+    participant_email.short_description = "Email"
     
     def participant_start_date(self, obj):
         try:
             return obj.participant.start_date
         except:
             return "-"
-    participant_start_date.short_description = "Study Start Date"
+    participant_start_date.short_description = "Start Date"
 
     def get_fieldsets(self, request, obj=None):
     # For the add form (obj is None), always use add_fieldsets
