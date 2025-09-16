@@ -1,6 +1,7 @@
 # goals/targets.py
 from datetime import datetime, date, timedelta
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,12 @@ def calculate_step_increase(current_avg, last_goal_data=None, target_was_met=Tru
     else:
         return _calculate_target_missed_matrix(current_avg, previous_increase)
 
+def is_target_day(participant_start_date):
+    """Check if today is a target day for this participant"""
+    today = date.today()
+    delta_days = (today - participant_start_date).days
+    return delta_days >= 7 and delta_days % 7 == 0
+    
 def _calculate_first_week_target(current_avg):
     """Calculate target for first week"""
     if current_avg < 5000:
@@ -258,6 +265,11 @@ def run_weekly_algorithm(participant):
     logger.info(f"Running weekly algorithm for participant {participant.id}")
     
     today = date.today()
+    
+    if not is_target_day(participant.start_date):
+    	logger.warning(f"Cannot calculate goals - today is not a target day")
+    	return None
+    
     targets = participant.targets or {}
     daily_steps = participant.daily_steps or []
     

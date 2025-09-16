@@ -3,6 +3,7 @@ Simulates real-world syncing delays:
 - Each user/dataset has a random (but contiguous) number of days with step data.
 - The possible number of days is [days_ago-2, days_ago-1, days_ago], always contiguous from the earliest day.
 - Goals: week 1 if at least 7 days; week 2 only for 14 days.
+- UPDATED: Creates data in Fitbit format: [{"date": "2025-09-03", "value": 2941}, {"date": "2025-09-04", "value": 3008}]
 """
 
 from datetime import date, timedelta
@@ -21,10 +22,11 @@ def generate_step_values(base_steps, variation=200, num_days=7):
     return values
 
 def create_step_data(start_date, step_values):
+    """Create step data in Fitbit format: [{"date": "2025-09-03", "value": 2941}]"""
     return [
         {
-            "value": str(steps),
-            "dateTime": (start_date + timedelta(days=day)).strftime("%Y-%m-%d")
+            "date": (start_date + timedelta(days=day)).strftime("%Y-%m-%d"),
+            "value": steps
         }
         for day, steps in enumerate(step_values)
     ]

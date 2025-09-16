@@ -1,0 +1,389 @@
+<!-- templates/admin/participant_detail.html -->
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Participant: {{ participant.user.email }}{% endblock %}
+
+{% block content %}
+  <style>
+    .participant-header {
+      background-color: #f8f9fa;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      border-left: 4px solid #007cba;
+    }
+    .chart-container {
+      background-color: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 20px;
+      margin: 20px 0;
+      position: relative;
+      height: 400px;
+    }
+    .json-container {
+      background-color: #f4f4f4;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 20px 0;
+      font-family: 'Courier New', monospace;
+      white-space: pre-wrap;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      color: #007cba;
+      text-decoration: none;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 10px;
+      margin: 15px 0;
+    }
+    .info-label {
+      font-weight: bold;
+      color: #333;
+    }
+    .section-toggle {
+      cursor: pointer;
+      color: #007cba;
+      text-decoration: none;
+      font-size: 0.9em;
+    }
+    .section-toggle:hover {
+      text-decoration: underline;
+    }
+    .collapsible-section {
+      display: none;
+    }
+    .chart-controls {
+      display: flex;
+      gap: 5px;
+    }
+    .chart-toggle {
+      background-color: #f8f9fa;
+      border: 1px solid #ddd;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+    }
+    .chart-toggle:hover {
+      background-color: #e9ecef;
+    }
+    .chart-toggle.active {
+      background-color: #007cba;
+      color: white;
+      border-color: #007cba;
+    }
+  </style>
+
+  <a href="{% url 'admin-dashboard' %}" class="back-link">← Back to Dashboard</a>
+
+  <div class="participant-header">
+    <h1>Participant Details</h1>
+    <div class="info-grid">
+      <div class="info-label">Email:</div>
+      <div>{{ participant.user.email }}</div>
+      
+      <div class="info-label">Start Date:</div>
+      <div>{{ participant.start_date|date:"Y-m-d" }}</div>
+      
+      <div class="info-label">Device Type:</div>
+      <div>{{ participant.device_type|default:"Not specified" }}</div>
+    </div>
+  </div>
+
+  <div class="content-section">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <h2>Daily Steps Chart</h2>
+      <div class="chart-controls">
+        <button id="btn-4weeks" class="chart-toggle active" onclick="switchView('4weeks')">4 Weeks</button>
+        <button id="btn-12months" class="chart-toggle" onclick="switchView('12months')">12 Months</button>
+      </div>
+    </div>
+    {% if participant.daily_steps %}
+      <div class="chart-container">
+        <canvas id="stepsChart"></canvas>
+      </div>
+    {% else %}
+      <p>No daily steps data available to chart.</p>
+    {% endif %}
+  </div>
+
+  <div class="content-section">
+    <h2>Weekly Progress Summary</h2>
+    {% if weekly_summaries %}
+      <div style="margin: 20px 0;">
+        {% for summary in weekly_summaries %}
+          <div style="border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px; padding: 15px; background-color: {% if summary.goal_met == True %}#f8fff8{% elif summary.goal_met == False %}#fff8f8{% else %}#f9f9f9{% endif %};">
+            <h4 style="margin-top: 0; color: #333;">
+              Week {{ summary.week_number }}: {{ summary.week_start|date:"M j" }} - {{ summary.week_end|date:"M j, Y" }}
+            </h4>
+            
+            <div class="info-grid" style="grid-template-columns: 200px 1fr;">
+              <div class="info-label">Target for this week was:</div>
+              <div>
+                {% if summary.previous_week_target %}
+                  {{ summary.previous_week_target }} steps/day
+                {% else %}
+                  No target set (first week)
+                {% endif %}
+              </div>
+              
+              <div class="info-label">Weekly average:</div>
+              <div>{{ summary.weekly_average }} steps/day</div>
+              
+              <div class="info-label">Goal met?</div>
+              <div>
+                {% if summary.goal_met == True %}
+                  <span style="color: green; font-weight: bold;">✓ Yes</span>
+                {% elif summary.goal_met == False %}
+                  <span style="color: red; font-weight: bold;">✗ No</span>
+                {% else %}
+                  <span style="color: gray;">N/A (no target)</span>
+                {% endif %}
+              </div>
+              
+              <div class="info-label">New increase:</div>
+              <div>
+                {% if summary.new_increase %}
+                  {{ summary.new_increase }}
+                {% else %}
+                  Not calculated
+                {% endif %}
+              </div>
+              
+              <div class="info-label">New target:</div>
+              <div>
+                {% if summary.new_target %}
+                  {{ summary.new_target }} steps/day
+                {% else %}
+                  Not set
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p>No weekly summaries available - insufficient target data.</p>
+    {% endif %}
+  </div>
+
+  <div class="content-section">
+    <h2>
+      Raw Data 
+      <a href="#" class="section-toggle" onclick="toggleSection('raw-data'); return false;">
+        (click to show/hide)
+      </a>
+    </h2>
+    
+    <div id="raw-data" class="collapsible-section">
+      <h3>Daily Steps Data (Raw JSON)</h3>
+      {% if participant.daily_steps %}
+        <div class="json-container">{{ participant.daily_steps|pprint }}</div>
+      {% else %}
+        <p>No daily steps data available.</p>
+      {% endif %}
+
+      <h3>Targets Data (Raw JSON)</h3>
+      {% if participant.targets %}
+        <div class="json-container">{{ participant.targets|pprint }}</div>
+      {% else %}
+        <p>No targets data available.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+  <script>
+    let chartInstance = null;
+    let rawDataMap = {};
+    
+    function toggleSection(sectionId) {
+      const section = document.getElementById(sectionId);
+      section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function switchView(view) {
+      // Update button states
+      document.getElementById('btn-4weeks').classList.toggle('active', view === '4weeks');
+      document.getElementById('btn-12months').classList.toggle('active', view === '12months');
+      
+      // Create new chart data based on view
+      if (view === '4weeks') {
+        createChart(28, 'Daily Step Count - Last 4 Weeks', 'MM/DD');
+      } else {
+        createChart(365, 'Daily Step Count - Last 12 Months', 'MM/DD/YY');
+      }
+    }
+    
+    function createChart(days, title, dateFormat) {
+      const today = new Date();
+      let chartLabels = [];
+      let chartData = [];
+      
+      if (days === 365) {
+        // Weekly aggregation for 12-month view (52 weeks)
+        const weeks = 52;
+        for (let i = weeks - 1; i >= 0; i--) {
+          const weekEnd = new Date(today);
+          weekEnd.setDate(weekEnd.getDate() - (i * 7));
+          const weekStart = new Date(weekEnd);
+          weekStart.setDate(weekStart.getDate() - 6);
+          
+          // Create week label
+          const weekLabel = weekStart.toISOString().split('T')[0];
+          chartLabels.push(weekLabel);
+          
+          // Calculate weekly total/average
+          let weekTotal = 0;
+          let daysWithData = 0;
+          
+          for (let d = 0; d < 7; d++) {
+            const checkDate = new Date(weekStart);
+            checkDate.setDate(checkDate.getDate() + d);
+            const dateString = checkDate.toISOString().split('T')[0];
+            
+            if (rawDataMap[dateString]) {
+              weekTotal += rawDataMap[dateString];
+              daysWithData++;
+            }
+          }
+          
+          // Use weekly average (total / 7) to show typical daily steps for that week
+          const weeklyAverage = daysWithData > 0 ? Math.round(weekTotal / 7) : 0;
+          chartData.push(weeklyAverage);
+        }
+      } else {
+        // Daily view for 4-week view (28 days)
+        for (let i = days - 1; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(date.getDate() - i);
+          const dateString = date.toISOString().split('T')[0];
+          chartLabels.push(dateString);
+          chartData.push(rawDataMap[dateString] || 0);
+        }
+      }
+      
+      // Format labels based on view
+      const formattedLabels = chartLabels.map(date => {
+        const d = new Date(date);
+        if (dateFormat === 'MM/DD') {
+          return (d.getMonth() + 1).toString().padStart(2, '0') + '/' + 
+                 d.getDate().toString().padStart(2, '0');
+        } else { // MM/DD/YY for weekly view
+          return (d.getMonth() + 1).toString().padStart(2, '0') + '/' + 
+                 d.getDate().toString().padStart(2, '0') + '/' + 
+                 d.getFullYear().toString().slice(-2);
+        }
+      });
+      
+      // Destroy existing chart
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+      
+      // Create new chart
+      const ctx = document.getElementById('stepsChart').getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: formattedLabels,
+          datasets: [{
+            label: days === 365 ? 'Weekly Avg Daily Steps' : 'Daily Steps',
+            data: chartData,
+            backgroundColor: chartData.map(value => 
+              value === 0 ? 'rgba(200, 200, 200, 0.3)' : 'rgba(54, 162, 235, 0.6)'
+            ),
+            borderColor: chartData.map(value => 
+              value === 0 ? 'rgba(200, 200, 200, 0.5)' : 'rgba(54, 162, 235, 1)'
+            ),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: title
+            },
+            tooltip: {
+              callbacks: {
+                title: function(context) {
+                  const index = context[0].dataIndex;
+                  if (days === 365) {
+                    // Show week range in tooltip for weekly view
+                    const weekStart = new Date(chartLabels[index]);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 6);
+                    return `Week of ${weekStart.toISOString().split('T')[0]} to ${weekEnd.toISOString().split('T')[0]}`;
+                  } else {
+                    // Show full date for daily view
+                    return chartLabels[index];
+                  }
+                },
+                label: function(context) {
+                  if (days === 365) {
+                    return `Avg daily steps this week: ${context.parsed.y}`;
+                  } else {
+                    return `Steps: ${context.parsed.y}`;
+                  }
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: days === 365 ? 'Avg Daily Steps' : 'Steps'
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: days === 365 ? 'Week Starting (MM/DD/YY)' : `Date (${dateFormat})`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Initialize chart data
+    {% if participant.daily_steps %}
+      const rawData = {{ participant.daily_steps|safe }};
+      
+      // Build data map for quick lookup
+      if (Array.isArray(rawData)) {
+        // Fitbit format: [{"date": "2025-09-03", "value": 2941}]
+        rawData.forEach(entry => {
+          rawDataMap[entry.date] = parseInt(entry.value);
+        });
+      } else {
+        // Dictionary format: {"2025-09-03": 2941}
+        Object.entries(rawData).forEach(([date, steps]) => {
+          rawDataMap[date] = parseInt(steps);
+        });
+      }
+      
+      // Create initial 4-week view
+      createChart(28, 'Daily Step Count - Last 4 Weeks', 'MM/DD');
+    {% endif %}
+  </script>
+
+{% endblock %}

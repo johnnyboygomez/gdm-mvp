@@ -41,13 +41,13 @@ class Command(BaseCommand):
         try:
             # Read CSV
             df = pd.read_csv(csv_file)
-            self.stdout.write(f"📊 Loaded CSV: {csv_file} ({len(df)} rows)")
+            self.stdout.write(f"Loaded CSV: {csv_file} ({len(df)} rows)")
             
             # Show what data we have
             if len(df) > 0:
-                self.stdout.write(f"📋 Columns: {', '.join(df.columns.tolist())}")
+                self.stdout.write(f"Columns: {', '.join(df.columns.tolist())}")
                 days_summary = df['actual_days'].value_counts().sort_index()
-                self.stdout.write(f"📅 Days distribution: {dict(days_summary)}")
+                self.stdout.write(f"Days distribution: {dict(days_summary)}")
 
             # Get participants
             if options['participant_ids']:
@@ -62,10 +62,10 @@ class Command(BaseCommand):
             else:
                 participants = list(Participant.objects.all()[:len(df)])
 
-            self.stdout.write(f"🎯 Will upload to {len(participants)} participants")
+            self.stdout.write(f"Will upload to {len(participants)} participants")
 
             if dry_run:
-                self.stdout.write(self.style.WARNING("🧪 DRY RUN MODE"))
+                self.stdout.write(self.style.WARNING("DRY RUN MODE"))
 
             # Upload data
             processed_count = 0
@@ -76,50 +76,55 @@ class Command(BaseCommand):
                     
                     # Skip participants with ID 1 or 47 (if you still want this)
                     if participant.id in [1, 47]:
-                        self.stdout.write(self.style.WARNING(f"⚠️ Skipping participant with ID {participant.id}"))
+                        self.stdout.write(self.style.WARNING(f"Skipping participant with ID {participant.id}"))
                         continue
                         
                     row = df.iloc[i]
                     
-                    self.stdout.write(f"\n👤 {participant.user.email} (ID: {participant.id})")
-                    self.stdout.write(f"   📅 Dataset: {row['actual_days']} ({row['actual_days']} days)")
+                    self.stdout.write(f"\n{participant.user.email} (ID: {participant.id})")
+                    self.stdout.write(f"   Dataset: {row['test_pair']} ({row['actual_days']} days)")
 
                     if not dry_run:
                         # Clear existing data
                         if clear_existing:
-                            participant.daily_steps = {}
+                            participant.daily_steps = []
                             participant.targets = {}
                             participant.save()
-                            self.stdout.write("   🗑️  Cleared existing data")
+                            self.stdout.write("   Cleared existing data")
 
-                        # Upload step data
+                        # Upload step data - convert from Fitbit format to daily_steps list
                         step_data_raw = json.loads(row['data_json'])
-                        daily_steps_dict = {}
-                        for day_entry in step_data_raw:
-                            date_key = day_entry['dateTime']
-                            steps = int(day_entry['value'])
-                            daily_steps_dict[date_key] = steps
+                        # step_data_raw is now [{"date": "2025-09-03", "value": 2941}, ...]
+                        
+                        # Store in the Fitbit format (list of dicts) as daily_steps
+                        participant.daily_steps = step_data_raw
+                        self.stdout.write(f"   Uploaded {len(step_data_raw)} days of step data")
 
-                        participant.daily_steps = daily_steps_dict
-                        self.stdout.write(f"   📈 Uploaded {len(daily_steps_dict)} days of step data")
-
-                        # Upload expected targets
+                        # Upload expected targets - ONLY WEEK 1
                         expected_goals_raw = json.loads(row['expected_goals_json'])
                         targets_dict = {}
                         
-                        for goal_date_str, goal_data in expected_goals_raw.items():
+                        # Sort the goal dates and only take the first one (week 1)
+                        goal_dates = sorted(expected_goals_raw.keys())
+                        if goal_dates:
+                            first_goal_date = goal_dates[0]  # Only take week 1 target
+                            goal_data = expected_goals_raw[first_goal_date]
+                            
                             if goal_data:  # Skip empty goals
-                                targets_dict[goal_date_str] = {
+                                targets_dict[first_goal_date] = {
                                     'average_steps': goal_data['average_steps'],
                                     'increase': str(goal_data['increase']),
                                     'new_target': goal_data['new_target']
                                 }
-                                self.stdout.write(f"   🎯 Expected target: {goal_date_str} → {goal_data['new_target']} steps")
+                                self.stdout.write(f"   Expected target (week 1 only): {first_goal_date} -> {goal_data['new_target']} steps")
+                                
+                                if len(goal_dates) > 1:
+                                    self.stdout.write(f"   Skipped week 2 target: {goal_dates[1]}")
 
                         # Save targets to database
                         participant.targets = targets_dict
                         participant.save()
-                        self.stdout.write(f"   💾 SAVED {len(targets_dict)} targets to participant.targets")
+                        self.stdout.write(f"   SAVED {len(targets_dict)} targets to participant.targets")
                         
                         processed_count += 1
                     else:
@@ -127,13 +132,13 @@ class Command(BaseCommand):
                         step_data = json.loads(row['data_json'])
                         expected_goals = json.loads(row['expected_goals_json'])
                         
-                        self.stdout.write(f"   📈 Would upload {len(step_data)} days of steps")
-                        self.stdout.write(f"   🎯 Would create {len([g for g in expected_goals.values() if g])} expected goals")
+                        self.stdout.write(f"   Would upload {len(step_data)} days of steps")
+                        self.stdout.write(f"   Would create {len([g for g in expected_goals.values() if g])} expected goals")
 
             if dry_run:
-                self.stdout.write(f"\n🧪 DRY RUN COMPLETE - Would have processed {len(participants)} participants")
+                self.stdout.write(f"\nDRY RUN COMPLETE - Would have processed {len(participants)} participants")
             else:
-                self.stdout.write(f"\n✅ SUCCESS! Processed {processed_count} participants")
+                self.stdout.write(f"\nSUCCESS! Processed {processed_count} participants")
 
         except Exception as e:
             raise CommandError(f'Error: {e}')

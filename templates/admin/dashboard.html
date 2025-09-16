@@ -1,6 +1,48 @@
 <!-- templates/admin/dashboard.html -->
 {% extends "admin/base_site.html" %}
 {% block content %}
+  <style>
+    .step-cell {
+      text-align: center;
+      padding: 8px;
+    }
+    .step-cell.has-data {
+      background-color: #e8f5e8;
+      font-weight: bold;
+    }
+    .step-cell.no-data-future {
+      background-color: #f5f5f5;
+      color: #999;
+    }
+    .step-cell.no-data-critical {
+      background-color: red;
+      color: white;
+      font-weight: bold;
+    }
+    .step-cell.no-data-warning {
+      background-color: orangered;
+      color: white;
+      font-weight: bold;
+    }
+    .step-cell.no-data-alert {
+      background-color: orange;
+      color: white;
+      font-weight: bold;
+    }
+    .step-cell.no-data-caution {
+      background-color: khaki;
+      color: black;
+    }
+    .dashboard-table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .dashboard-table th {
+      background-color: #f0f0f0;
+      padding: 8px;
+      text-align: center;
+    }
+  </style>
   <h1>Custom Admin Dashboard - Blocks by Day</h1>
   <p>
     {% if is_superuser %}
@@ -22,15 +64,13 @@
             {% else %}In {{ days }} days ({{ today|add:days|stringformat:"s"|date:"Y-m-d" }})
             {% endif %}
           </h2>
-          <p style="color: red;">
-            DEBUG: block_date = {{ block_date }} | block_date|date:"Y-m-d" = {{ block_date|date:"Y-m-d" }}
-          </p>
-          <table border="1" style="border-collapse: collapse; width: 100%;">
+
+          <table class="dashboard-table">
             <thead>
               <tr>
                 <th>Email</th>
                 {% for day in group.header_days %}
-                  <th>{{ day|date:"D" }}</th>
+                  <th>{{ day|date:"D" }}<br><small>{{ day|date:"m/d" }}</small></th>
                 {% endfor %}
                 <th>Target Date</th>
               </tr>
@@ -38,9 +78,16 @@
             <tbody>
               {% for p in group.participants %}
                 <tr>
-                <td>{{ p.email }}</td>
-                  {% for day in group.header_days %}
-                    <td>x</td>
+                   <td>
+                     <a href="{% url 'participant_detail' p.participant_id %}" 
+                        style="color: #007cba; text-decoration: none;">
+                       {{ p.email }}
+                     </a>
+                   </td>
+                  {% for cell in p.steps_with_classes %}
+                    <td class="step-cell {{ cell.class }}">
+                      {{ cell.steps }}
+                    </td>
                   {% endfor %}
                   <td>{{ p.next_target_day|date:"Y-m-d" }}</td>
                 </tr>
@@ -58,25 +105,24 @@
             {% else %}In {{ days }} days ({{ today|add:days|stringformat:"s"|date:"Y-m-d" }})
             {% endif %}
           </h2>
-          <p style="color: red;">
-            DEBUG: block_date = {{ block_date }} | block_date|date:"Y-m-d" = {{ block_date|date:"Y-m-d" }}
-          </p>
-          <table border="1" style="border-collapse: collapse; width: 100%;">
+          
+          <table class="dashboard-table">
             <thead>
               <tr>
-                {% for day in group.header_days %}
-                  <th>{{ day|date:"D" }}</th>
-                {% endfor %}
                 <th>Email</th>
+                {% for day in group.header_days %}
+                  <th>{{ day|date:"D" }}<br><small>{{ day|date:"m/d" }}</small></th>
+                {% endfor %}
                 <th>Target Date</th>
               </tr>
             </thead>
             <tbody>
               <tr>
+                <td>No participants</td>
                 {% for day in group.header_days %}
-                  <td></td>
+                  <td class="step-cell no-data-future">-</td>
                 {% endfor %}
-                <td colspan="2">No participants</td>
+                <td>-</td>
               </tr>
             </tbody>
           </table>
@@ -94,10 +140,9 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.dashboard-block table tbody').forEach(tbody => {
     const rows = Array.from(tbody.querySelectorAll('tr'))
       .filter(row => !row.textContent.includes('No participants'));
-    // Email is now the column after the day columns
-    const emailCol = tbody.parentNode.querySelector('thead tr').children.length - 2;
+    // Email is now the first column (index 0)
     rows.sort((a, b) => naturalCompare(
-      a.cells[emailCol].innerText, b.cells[emailCol].innerText
+      a.cells[0].innerText, b.cells[0].innerText
     ));
     rows.forEach(row => tbody.appendChild(row));
   });
