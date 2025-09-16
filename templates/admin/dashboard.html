@@ -1,9 +1,7 @@
-<! templates/admin/dashboard.html -->
-
+<!-- templates/admin/dashboard.html -->
 {% extends "admin/base_site.html" %}
-
 {% block content %}
-  <h1>Custom Admin Dashboard</h1>
+  <h1>Custom Admin Dashboard - Blocks by Day</h1>
   <p>
     {% if is_superuser %}
       You are a <strong>Superuser</strong>.
@@ -14,24 +12,95 @@
     {% endif %}
   </p>
   <hr>
-
-  <h2>Participants</h2>
-  <table class="admin-dashboard-table">
-    <thead>
-      <tr>
-        <th>Email</th>
-        <th>Start Date</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for p in participants %}
-        <tr>
-          <td>{{ p.email }}</td>
-          <td>{{ p.start_date|date:"Y-m-d" }}</td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="2">No participants found.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  {% for group in grouped_participants_with_headers %}
+    {% if group.participants %}
+      {% with block_date=group.participants.0.next_target_day days=group.days %}
+        <div class="dashboard-block" style="margin-bottom:2em;">
+          <h2>
+            {% if days == 0 %}Today ({{ today|date:"Y-m-d" }})
+            {% elif days == 1 %}Tomorrow ({{ today|add:"1"|date:"Y-m-d" }})
+            {% else %}In {{ days }} days ({{ today|add:days|stringformat:"s"|date:"Y-m-d" }})
+            {% endif %}
+          </h2>
+          <p style="color: red;">
+            DEBUG: block_date = {{ block_date }} | block_date|date:"Y-m-d" = {{ block_date|date:"Y-m-d" }}
+          </p>
+          <table border="1" style="border-collapse: collapse; width: 100%;">
+            <thead>
+              <tr>
+                <th>Email</th>
+                {% for day in group.header_days %}
+                  <th>{{ day|date:"D" }}</th>
+                {% endfor %}
+                <th>Target Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in group.participants %}
+                <tr>
+                <td>{{ p.email }}</td>
+                  {% for day in group.header_days %}
+                    <td>x</td>
+                  {% endfor %}
+                  <td>{{ p.next_target_day|date:"Y-m-d" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endwith %}
+    {% else %}
+      {% with block_date=today days=group.days %}
+        <div class="dashboard-block" style="margin-bottom:2em;">
+          <h2>
+            {% if days == 0 %}Today ({{ today|date:"Y-m-d" }})
+            {% elif days == 1 %}Tomorrow ({{ today|add:"1"|date:"Y-m-d" }})
+            {% else %}In {{ days }} days ({{ today|add:days|stringformat:"s"|date:"Y-m-d" }})
+            {% endif %}
+          </h2>
+          <p style="color: red;">
+            DEBUG: block_date = {{ block_date }} | block_date|date:"Y-m-d" = {{ block_date|date:"Y-m-d" }}
+          </p>
+          <table border="1" style="border-collapse: collapse; width: 100%;">
+            <thead>
+              <tr>
+                {% for day in group.header_days %}
+                  <th>{{ day|date:"D" }}</th>
+                {% endfor %}
+                <th>Email</th>
+                <th>Target Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {% for day in group.header_days %}
+                  <td></td>
+                {% endfor %}
+                <td colspan="2">No participants</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      {% endwith %}
+    {% endif %}
+  {% empty %}
+    <p>No upcoming participants with targets in the next 7 days.</p>
+  {% endfor %}
+<script>
+function naturalCompare(a, b) {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.dashboard-block table tbody').forEach(tbody => {
+    const rows = Array.from(tbody.querySelectorAll('tr'))
+      .filter(row => !row.textContent.includes('No participants'));
+    // Email is now the column after the day columns
+    const emailCol = tbody.parentNode.querySelector('thead tr').children.length - 2;
+    rows.sort((a, b) => naturalCompare(
+      a.cells[emailCol].innerText, b.cells[emailCol].innerText
+    ));
+    rows.forEach(row => tbody.appendChild(row));
+  });
+});
+</script>
 {% endblock %}

@@ -1,1 +1,0 @@
-SELECT * FROM core_participant

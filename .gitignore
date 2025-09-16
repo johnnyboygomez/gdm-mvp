@@ -1,5 +1,22 @@
+*.py[cod]
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.env/
 
 settings_local.py
 .DS_Store
 .DS_Store
 .DS_Store
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# Test data or CSVs if not needed in repo
+*.csv
+*.json

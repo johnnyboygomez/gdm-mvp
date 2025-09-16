@@ -42,13 +42,12 @@ class Command(BaseCommand):
             # Read CSV
             df = pd.read_csv(csv_file)
             self.stdout.write(f"📊 Loaded CSV: {csv_file} ({len(df)} rows)")
-
-            # Get data we need
-            week1_data = df[df['test_type'] == 'single_week'].reset_index(drop=True)
-            week2_data = df[df['test_type'] == 'two_weeks_variable'].reset_index(drop=True)
-
-            self.stdout.write(f"Week 1 (expected goals): {len(week1_data)} datasets")
-            self.stdout.write(f"Week 2 (step data): {len(week2_data)} datasets")
+            
+            # Show what data we have
+            if len(df) > 0:
+                self.stdout.write(f"📋 Columns: {', '.join(df.columns.tolist())}")
+                days_summary = df['actual_days'].value_counts().sort_index()
+                self.stdout.write(f"📅 Days distribution: {dict(days_summary)}")
 
             # Get participants
             if options['participant_ids']:
@@ -61,8 +60,7 @@ class Command(BaseCommand):
                         self.stdout.write(self.style.ERROR(f"Participant {pid} not found"))
                         return
             else:
-                max_datasets = min(len(week1_data), len(week2_data))
-                participants = list(Participant.objects.all()[:max_datasets])
+                participants = list(Participant.objects.all()[:len(df)])
 
             self.stdout.write(f"🎯 Will upload to {len(participants)} participants")
 
@@ -70,12 +68,21 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING("🧪 DRY RUN MODE"))
 
             # Upload data
+            processed_count = 0
             with transaction.atomic():
                 for i, participant in enumerate(participants):
-                    week1_row = week1_data.iloc[i]
-                    week2_row = week2_data.iloc[i]
-
+                    if i >= len(df):
+                        break
+                    
+                    # Skip participants with ID 1 or 47 (if you still want this)
+                    if participant.id in [1, 47]:
+                        self.stdout.write(self.style.WARNING(f"⚠️ Skipping participant with ID {participant.id}"))
+                        continue
+                        
+                    row = df.iloc[i]
+                    
                     self.stdout.write(f"\n👤 {participant.user.email} (ID: {participant.id})")
+                    self.stdout.write(f"   📅 Dataset: {row['actual_days']} ({row['actual_days']} days)")
 
                     if not dry_run:
                         # Clear existing data
@@ -86,7 +93,7 @@ class Command(BaseCommand):
                             self.stdout.write("   🗑️  Cleared existing data")
 
                         # Upload step data
-                        step_data_raw = json.loads(week2_row['data_json'])
+                        step_data_raw = json.loads(row['data_json'])
                         daily_steps_dict = {}
                         for day_entry in step_data_raw:
                             date_key = day_entry['dateTime']
@@ -97,7 +104,7 @@ class Command(BaseCommand):
                         self.stdout.write(f"   📈 Uploaded {len(daily_steps_dict)} days of step data")
 
                         # Upload expected targets
-                        expected_goals_raw = json.loads(week1_row['expected_goals_json'])
+                        expected_goals_raw = json.loads(row['expected_goals_json'])
                         targets_dict = {}
                         
                         for goal_date_str, goal_data in expected_goals_raw.items():
@@ -109,13 +116,24 @@ class Command(BaseCommand):
                                 }
                                 self.stdout.write(f"   🎯 Expected target: {goal_date_str} → {goal_data['new_target']} steps")
 
-                        # THIS IS THE CRITICAL LINE - Save targets to database
+                        # Save targets to database
                         participant.targets = targets_dict
                         participant.save()
                         self.stdout.write(f"   💾 SAVED {len(targets_dict)} targets to participant.targets")
+                        
+                        processed_count += 1
+                    else:
+                        # Dry run - show what would be uploaded
+                        step_data = json.loads(row['data_json'])
+                        expected_goals = json.loads(row['expected_goals_json'])
+                        
+                        self.stdout.write(f"   📈 Would upload {len(step_data)} days of steps")
+                        self.stdout.write(f"   🎯 Would create {len([g for g in expected_goals.values() if g])} expected goals")
 
-            self.stdout.write(f"\n✅ SUCCESS! Processed {len(participants)} participants")
+            if dry_run:
+                self.stdout.write(f"\n🧪 DRY RUN COMPLETE - Would have processed {len(participants)} participants")
+            else:
+                self.stdout.write(f"\n✅ SUCCESS! Processed {processed_count} participants")
 
         except Exception as e:
             raise CommandError(f'Error: {e}')
-            

@@ -1,5 +1,3 @@
-# Save as: core/management/commands/create_test_users.py
-
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from core.models import CustomUser, Participant
@@ -40,6 +38,12 @@ class Command(BaseCommand):
             help='Start date for participants (YYYY-MM-DD). If not provided, uses random dates within last 30 days.'
         )
         parser.add_argument(
+            '--id-start',
+            type=int,
+            default=1,
+            help='User number to start with for suffix (default: 1)'
+        )
+        parser.add_argument(
             '--dry-run',
             action='store_true',
             help='Show what would be created without actually creating'
@@ -51,6 +55,7 @@ class Command(BaseCommand):
         domain = options['domain']
         password = options['password']
         dry_run = options['dry_run']
+        id_start = options['id_start']
         
         # Handle start date
         if options['start_date']:
@@ -63,16 +68,18 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("🧪 DRY RUN MODE - No users will be created"))
 
         self.stdout.write(f"Creating {count} test users:")
-        self.stdout.write(f"  📧 Email pattern: {prefix}N@{domain}")
+        self.stdout.write(f"  📧 Email pattern: {prefix}N@{domain} (N starts at {id_start})")
         self.stdout.write(f"  🔐 Password: {password}")
         
         created_users = []
         created_participants = []
-        
+
+        created = 0
+        i = id_start
         with transaction.atomic():
-            for i in range(1, count + 1):
+            while created < count:
                 email = f"{prefix}{i}@{domain}"
-                
+
                 # Generate start date
                 if base_start_date:
                     start_date = base_start_date
@@ -80,31 +87,36 @@ class Command(BaseCommand):
                     # Random date within last 30 days
                     days_ago = random.randint(1, 30)
                     start_date = date.today() - timedelta(days=days_ago)
-                
-                if not dry_run:
-                    try:
-                        # Create user
-                        user = CustomUser.objects.create_user(
-                            email=email,
-                            password=password
-                        )
-                        created_users.append(user)
-                        
-                        # Create participant
-                        participant = Participant.objects.create(
-                            user=user,
-                            start_date=start_date
-                        )
-                        created_participants.append(participant)
-                        
-                        self.stdout.write(f"  ✅ Created: {email} (Participant ID: {participant.id})")
-                        
-                    except Exception as e:
-                        self.stdout.write(
-                            self.style.ERROR(f"  ❌ Error creating {email}: {e}")
-                        )
+
+                if CustomUser.objects.filter(email=email).exists():
+                    self.stdout.write(self.style.WARNING(f"  ⚠️ Skipping: {email} (already exists)"))
                 else:
-                    self.stdout.write(f"  📋 Would create: {email} (start date: {start_date})")
+                    if not dry_run:
+                        try:
+                            # Create user
+                            user = CustomUser.objects.create_user(
+                                email=email,
+                                password=password
+                            )
+                            created_users.append(user)
+                            
+                            # Create participant
+                            participant = Participant.objects.create(
+                                user=user,
+                                start_date=start_date
+                            )
+                            created_participants.append(participant)
+                            
+                            self.stdout.write(f"  ✅ Created: {email} (Participant ID: {participant.id})")
+                            created += 1
+                        except Exception as e:
+                            self.stdout.write(
+                                self.style.ERROR(f"  ❌ Error creating {email}: {e}")
+                            )
+                    else:
+                        self.stdout.write(f"  📋 Would create: {email} (start date: {start_date})")
+                        created += 1  # Still increment in dry run mode
+                i += 1
 
         if not dry_run:
             self.stdout.write(f"\n🎉 SUCCESS!")

@@ -1,194 +1,155 @@
-#!/usr/bin/env python3
 """
-Test Data Generator - Following Your Exact Pattern
-
-Creates test data using your methodology:
-1. Generate week of data → single goal
-2. Shift same data back 1 week + add new week → two goals (first identical, just different date)
+Simulates real-world syncing delays: 
+- Each user/dataset has a random (but contiguous) number of days with step data.
+- The possible number of days is [days_ago-2, days_ago-1, days_ago], always contiguous from the earliest day.
+- Goals: week 1 if at least 7 days; week 2 only for 14 days.
 """
 
 from datetime import date, timedelta
 import json
 import random
+import csv
+import os
 
-def generate_week_values(base_steps, variation=200):
-    """Generate 7 step values for a week"""
+def generate_step_values(base_steps, variation=200, num_days=7):
+    """Generate num_days of step values."""
     values = []
-    for day in range(7):
+    for _ in range(num_days):
         steps = base_steps + random.randint(-variation, variation)
         steps = max(1000, steps)
         values.append(steps)
     return values
 
-def create_week_data(start_monday, step_values):
-    """Convert step values to your JSON format for specific week"""
-    week_data = []
-    for day in range(7):
-        current_date = start_monday + timedelta(days=day)
-        week_data.append({
-            "value": str(step_values[day]),
-            "dateTime": current_date.strftime("%Y-%m-%d")
-        })
-    return week_data
+def create_step_data(start_date, step_values):
+    return [
+        {
+            "value": str(steps),
+            "dateTime": (start_date + timedelta(days=day)).strftime("%Y-%m-%d")
+        }
+        for day, steps in enumerate(step_values)
+    ]
 
 def calculate_average(step_values):
-    """Calculate integer average like your algorithm"""
     return sum(step_values) // len(step_values)
 
 def predict_goal(average_steps, scenario="first_week"):
-    """Predict goal based on average - simplified for demo"""
-    if scenario == "first_week":
-        if average_steps < 5000:
-            return {"increase": "500", "new_target": average_steps + 500, "average_steps": average_steps}
-        elif average_steps < 7500:
-            return {"increase": "1000", "new_target": average_steps + 1000, "average_steps": average_steps}
-        elif average_steps < 9000:
-            return {"increase": "1000", "new_target": average_steps + 1000, "average_steps": average_steps}
-        elif average_steps < 10000:
-            return {"increase": "increase to 10000", "new_target": 10000, "average_steps": average_steps}
-        else:
-            return {"increase": "maintain", "new_target": average_steps, "average_steps": average_steps}
-    
-    # For second week, just a simple example - you'd use your actual algorithm
-    return {"increase": "250", "new_target": average_steps + 250, "average_steps": average_steps}
+    if average_steps < 5000:
+        return {"increase": "500", "new_target": average_steps + 500, "average_steps": average_steps}
+    elif average_steps < 7500:
+        return {"increase": "1000", "new_target": average_steps + 1000, "average_steps": average_steps}
+    elif average_steps < 9000:
+        return {"increase": "1000", "new_target": average_steps + 1000, "average_steps": average_steps}
+    elif average_steps < 10000:
+        return {"increase": "increase to 10000", "new_target": 10000, "average_steps": average_steps}
+    else:
+        return {"increase": "maintain", "new_target": average_steps, "average_steps": average_steps}
 
-def create_test_pair(name, initial_week_start, week1_base, week2_base=None, variation=200):
-    """
-    Create a test pair following your exact methodology:
-    1. Single week test
-    2. Same data shifted back + new week test
-    """
-    
-    print(f"\n{'='*70}")
-    print(f"TEST PAIR: {name}")
-    print(f"{'='*70}")
-    
-    # Generate week 1 step values
-    week1_values = generate_week_values(week1_base, variation)
-    week1_avg = calculate_average(week1_values)
-    
-    print(f"Week 1 values: {week1_values}")
-    print(f"Week 1 average: {week1_avg}")
-    
-    # TEST 1: Single week
-    print(f"\n--- TEST 1: SINGLE WEEK ---")
-    week1_data = create_week_data(initial_week_start, week1_values)
-    goal_date_1 = initial_week_start + timedelta(days=7)
-    goal_key_1 = goal_date_1.strftime("%Y-%m-%d")
-    
-    expected_goal_1 = predict_goal(week1_avg, "first_week")
-    expected_result_1 = {goal_key_1: expected_goal_1}
-    
-    print(f"Week 1 data ({initial_week_start.strftime('%Y-%m-%d')} to {(initial_week_start + timedelta(days=6)).strftime('%Y-%m-%d')}):")
-    print(json.dumps(week1_data))
-    print(f"\nExpected result:")
-    print(json.dumps(expected_result_1))
-    
-    # TEST 2: Same data shifted back + new week
-    print(f"\n--- TEST 2: TWO WEEKS (SAME DATA SHIFTED) ---")
-    
-    # Shift week 1 back by 7 days
-    shifted_week_start = initial_week_start - timedelta(days=7)
-    shifted_week1_data = create_week_data(shifted_week_start, week1_values)  # SAME VALUES!
-    
-    # Generate week 2 data
-    if week2_base:
-        week2_values = generate_week_values(week2_base, variation)
-    else:
-        # Generate week 2 with slight variation from week 1
-        week2_values = generate_week_values(week1_base + random.randint(-300, 400), variation)
-    
-    week2_avg = calculate_average(week2_values)
-    week2_data = create_week_data(initial_week_start, week2_values)  # Week 2 uses original start date
-    
-    # Combine data
-    combined_data = shifted_week1_data + week2_data
-    
-    # Expected results
-    shifted_goal_date = shifted_week_start + timedelta(days=7)  # This should be initial_week_start
-    goal_key_shifted = shifted_goal_date.strftime("%Y-%m-%d")
-    goal_key_2 = goal_date_1.strftime("%Y-%m-%d")  # Second goal same as before
-    
-    # CRITICAL: First goal should be IDENTICAL to test 1, just different date
-    expected_goal_shifted = predict_goal(week1_avg, "first_week")  # SAME as test 1
-    expected_goal_2 = predict_goal(week2_avg, "second_week")
-    
-    expected_result_2 = {
-        goal_key_shifted: expected_goal_shifted,
-        goal_key_2: expected_goal_2,
-    }
-    
-    print(f"Modified week 1 and week 2 data:")
-    print(f"  Week 1 shifted: {shifted_week_start.strftime('%Y-%m-%d')} to {(shifted_week_start + timedelta(days=6)).strftime('%Y-%m-%d')} (SAME VALUES)")
-    print(f"  Week 2: {initial_week_start.strftime('%Y-%m-%d')} to {(initial_week_start + timedelta(days=6)).strftime('%Y-%m-%d')} (avg: {week2_avg})")
-    print(json.dumps(combined_data))
-    
-    print(f"\nExpected result:")
-    print(json.dumps(expected_result_2))
-    
-    # VALIDATION CHECK
-    print(f"\n--- VALIDATION ---")
-    if expected_goal_shifted == expected_goal_1:
-        print(f"✅ CORRECT: First goal identical in both tests (same values, different dates)")
-        print(f"   Test 1: {goal_key_1} → {expected_goal_1}")
-        print(f"   Test 2: {goal_key_shifted} → {expected_goal_shifted}")
-    else:
-        print(f"❌ ERROR: First goal should be identical!")
-    
-    return {
-        'test1_data': week1_data,
-        'test1_expected': expected_result_1,
-        'test2_data': combined_data, 
-        'test2_expected': expected_result_2
-    }
+def generate_test_data(num_datasets=20, seed=42, days_ago=14):
+    random.seed(seed)
+    activity_profiles = [
+        {"name": "Sedentary", "base_range": (2000, 4000), "variation": (100, 300)},
+        {"name": "Lightly_Active", "base_range": (4000, 6000), "variation": (150, 400)},
+        {"name": "Moderately_Active", "base_range": (6000, 8000), "variation": (200, 500)},
+        {"name": "Active", "base_range": (8000, 10000), "variation": (300, 600)},
+        {"name": "Highly_Active", "base_range": (10000, 15000), "variation": (500, 1000)},
+    ]
+    all_test_results = {}
+    yesterday = date.today() - timedelta(days=1)
+    start_date = yesterday - timedelta(days=days_ago - 1)
+
+    for i in range(num_datasets):
+        profile = random.choice(activity_profiles)
+        week1_base = random.randint(*profile["base_range"])
+        variation = random.randint(*profile["variation"])
+        # For each user, pick a random number of days in [days_ago-2, days_ago-1, days_ago]
+        min_days = max(7, days_ago - 2)  # never less than 7
+        max_days = days_ago
+        actual_days = random.randint(min_days, max_days)
+        step_values = generate_step_values(week1_base, variation, num_days=actual_days)
+        step_data = create_step_data(start_date, step_values)
+        test_name = f"Dataset_{i+1:02d}_{profile['name']}_{actual_days}days"
+
+        expected_goals = {}
+        # Always calculate week 1 target if at least 7 days of data
+        if actual_days >= 7:
+            week1 = step_values[:7]
+            week1_avg = calculate_average(week1)
+            goal_date_1 = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
+            expected_goals[goal_date_1] = predict_goal(week1_avg, "first_week")
+        # Only calculate week 2 target if there are 14 days
+        if actual_days == 14:
+            week2 = step_values[7:14]
+            week2_avg = calculate_average(week2)
+            goal_date_2 = (start_date + timedelta(days=14)).strftime("%Y-%m-%d")
+            expected_goals[goal_date_2] = predict_goal(week2_avg, "second_week")
+
+        all_test_results[test_name] = {
+            "step_data": step_data,
+            "expected_goals": expected_goals,
+            "actual_days": actual_days
+        }
+    return all_test_results
+
+def save_to_csv(all_test_results, filename="step_goals_test_data.csv"):
+    csv_data = []
+    for test_name, results in all_test_results.items():
+        row = {
+            "test_pair": test_name,
+            "actual_days": results["actual_days"],
+            "data_json": json.dumps(results["step_data"]),
+            "expected_goals_json": json.dumps(results["expected_goals"])
+        }
+        csv_data.append(row)
+    fieldnames = ["test_pair", "actual_days", "data_json", "expected_goals_json"]
+    file_exists = os.path.isfile(filename)
+    with open(filename, "a", newline="", encoding="utf-8") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()   # Only write header if new file
+        writer.writerows(csv_data)
+    return filename
+
+def get_user_input():
+    while True:
+        try:
+            seed = int(input("Please enter seed (1 to 99): "))
+            if 1 <= seed <= 99:
+                break
+            else:
+                print("Please enter a number between 1 and 99")
+        except ValueError:
+            print("Please enter a valid number")
+    while True:
+        try:
+            datasets = int(input("Please enter number of datasets required (1 to 99): "))
+            if 1 <= datasets <= 99:
+                break
+            else:
+                print("Please enter a number between 1 and 99")
+        except ValueError:
+            print("Please enter a valid number")
+    while True:
+        try:
+            days_ago = int(input("How many days ago should the data start? (12, 13, or 14 days): "))
+            if 12 <= days_ago <= 14:
+                break
+            else:
+                print("Please enter number of days: 12, 13 or 14")
+        except ValueError:
+            print("Please enter a valid number")
+    return seed, datasets, days_ago
 
 def main():
-    """Generate test pairs following your methodology"""
-    
-    print("STEP GOALS TEST DATA GENERATOR")
-    print("Following your exact pattern: same data, shifted dates")
-    
-    yesterday = date.today() - timedelta(days=1)  # Sep 8
-    data_week_start = yesterday - timedelta(days=6)
-    
-    # Set seed for reproducible results
-    random.seed(42)
-    
-    # Test Pair 1: Low activity user (like your example)
-    create_test_pair(
-        name="Low Activity User (~4200 steps)",
-        initial_week_start=data_week_start,
-        week1_base=4200,
-        week2_base=4400,  # Slight improvement
-        variation=150
-    )
-    
-    # Test Pair 2: Moderate activity user
-    create_test_pair(
-        name="Moderate Activity User (~6000 steps)", 
-        initial_week_start=data_week_start,  # Monday Aug 18
-        week1_base=6000,
-        week2_base=6500,
-        variation=250
-    )
-    
-    # Test Pair 3: Near 10k user  
-    create_test_pair(
-        name="Near 10K User (~9400 steps)",
-        initial_week_start=data_week_start,  # Monday Aug 4
-        week1_base=5999,
-        week2_base=9100,  # Slight decline, might miss target
-        variation=500
-    )
-    
-    print(f"\n{'='*70}")
-    print("HOW TO USE:")
-    print("1. Use TEST 1 data first → verify single goal works")
-    print("2. Use TEST 2 data → verify:")
-    print("   - First goal is IDENTICAL to TEST 1 (same values, different date)")
-    print("   - Second goal is calculated correctly")
-    print("3. If first goal changes between tests → ALGORITHM BUG!")
-    print(f"{'='*70}")
+    print("Step Data Generator (with random real-world syncing)")
+    print("===================")
+    seed, num_datasets, days_ago = get_user_input()
+    output_filename = f"step_goals_test_data_{num_datasets}datasets.csv"
+    print(f"\nGenerating {num_datasets} datasets with seed {seed} and up to {days_ago} days of data each...")
+    all_test_results = generate_test_data(num_datasets, seed, days_ago)
+    filename = save_to_csv(all_test_results, output_filename)
+    print(f"\n✅ Complete!")
+    print(f"Generated {len(all_test_results)} datasets with {days_ago} possible days (each has 7 to {days_ago})")
+    print(f"Saved to: {filename}")
 
 if __name__ == "__main__":
     main()

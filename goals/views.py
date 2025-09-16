@@ -2,6 +2,7 @@
 from django.shortcuts import render, get_object_or_404
 from core.models import Participant
 from .targets import run_weekly_algorithm
+from datetime import date, timedelta
 
 def calculate_weekly_goals(request, participant_id):
     participant = get_object_or_404(Participant, pk=participant_id)
@@ -29,3 +30,4 @@ def calculate_weekly_goals(request, participant_id):
         }
     
     return render(request, "fitbit/popup_result.html", context)
+    
