@@ -12,10 +12,6 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-        ('auth', '0013_alter_group_id_alter_permission_id_alter_user_id'),
-    ]
-
     operations = [
         migrations.CreateModel(
             name='CustomUser',

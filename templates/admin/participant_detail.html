@@ -93,13 +93,23 @@
     <h1>Participant Details</h1>
     <div class="info-grid">
       <div class="info-label">Email:</div>
-      <div>{{ participant.user.email }}</div>
+      <div>
+        <a href="mailto:{{ participant.user.email }}" style="color: #007cba; text-decoration: none;">
+          {{ participant.user.email }}
+        </a>
+      </div>
       
       <div class="info-label">Start Date:</div>
       <div>{{ participant.start_date|date:"Y-m-d" }}</div>
       
-      <div class="info-label">Device Type:</div>
-      <div>{{ participant.device_type|default:"Not specified" }}</div>
+      <div class="info-label">Admin:</div>
+      <div>
+        <a href="{% url 'admin:core_customuser_change' participant.user.id %}" 
+           style="color: #007cba; text-decoration: none;"
+           target="_blank">
+          Participant Admin Page
+        </a>
+      </div>
     </div>
   </div>
 
@@ -178,31 +188,6 @@
     {% else %}
       <p>No weekly summaries available - insufficient target data.</p>
     {% endif %}
-  </div>
-
-  <div class="content-section">
-    <h2>
-      Raw Data 
-      <a href="#" class="section-toggle" onclick="toggleSection('raw-data'); return false;">
-        (click to show/hide)
-      </a>
-    </h2>
-    
-    <div id="raw-data" class="collapsible-section">
-      <h3>Daily Steps Data (Raw JSON)</h3>
-      {% if participant.daily_steps %}
-        <div class="json-container">{{ participant.daily_steps|pprint }}</div>
-      {% else %}
-        <p>No daily steps data available.</p>
-      {% endif %}
-
-      <h3>Targets Data (Raw JSON)</h3>
-      {% if participant.targets %}
-        <div class="json-container">{{ participant.targets|pprint }}</div>
-      {% else %}
-        <p>No targets data available.</p>
-      {% endif %}
-    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>

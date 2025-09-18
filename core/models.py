@@ -35,11 +35,24 @@ class CustomUser(AbstractUser):
     objects = CustomUserManager() 
     
 class Participant(models.Model):
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('fr', 'Français'),
+    ]
+    
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     start_date = models.DateField()
-    # Remove the email field entirely
     daily_steps = models.JSONField(default=dict, blank=True)
     targets = models.JSONField(default=dict, blank=True)
+    
+    language = models.CharField(
+        max_length=2, 
+        choices=LANGUAGE_CHOICES, 
+        default='en',
+        verbose_name='Language'
+    )
+    
+    message_history = models.JSONField(default=list, blank=True, help_text="History of messages sent to participant")
     
     device_type = models.CharField(
         max_length=50,
@@ -52,7 +65,7 @@ class Participant(models.Model):
     fitbit_auth_token = models.UUIDField(default=uuid.uuid4, unique=True)
     
     def __str__(self):
-        return f"{self.user.email}"
+        return f"{self.user.email} ({self.get_language_display()})"
     
     @property
     def email(self):

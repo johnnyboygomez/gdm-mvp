@@ -20,7 +20,7 @@ class ParticipantButtonMixin:
                 '<a class="button" href="{}" target="_blank">Calculate Weekly Goals</a>', url
             )
         return "Save participant first"
-    
+
     def fetch_fitbit_data_button(self, obj):
         if obj.pk:
             url = reverse("device_integration:fetch_fitbit_data", args=[obj.pk])
@@ -29,7 +29,7 @@ class ParticipantButtonMixin:
             )
         return "Save participant first"
     fetch_fitbit_data_button.short_description = "Fetch Fitbit Data"
-    
+
     def authenticate_fitbit_button(self, obj):
         if obj.pk:
             url = reverse("device_integration:fitbit_auth_start", args=[obj.pk])
@@ -39,6 +39,14 @@ class ParticipantButtonMixin:
         return "Save participant first"
     authenticate_fitbit_button.short_description = "Fitbit Authentication"
 
+    def send_weekly_message_button(self, obj):
+        if obj.pk:
+            url = reverse("goals:send_weekly_message", args=[obj.pk])
+            return format_html(
+                '<a class="button" href="{}" target="_blank">Send Weekly Message</a>', url
+            )
+        return "Save participant first"
+    send_weekly_message_button.short_description = "Send Weekly Message"
 
 ###############
 # Inline for Participant
@@ -57,6 +65,7 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
         'authenticate_fitbit_button',
         'fetch_fitbit_data_button',
         'calculate_weekly_goals_button',
+        'send_weekly_message_button',
     ]
     
     def get_readonly_fields(self, request, obj=None):
@@ -78,7 +87,7 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
             data = list(reversed(data))
             return format_html_join(
                 "", "<li>{}: {} steps</li>",
-                ((d.get("dateTime"), d.get("value")) for d in data)
+                ((d.get("date") or d.get("dateTime"), d.get("value")) for d in data)
             )
         elif isinstance(data, dict):
             # sort by date descending
@@ -93,6 +102,7 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
         # Customize visible fields based on user permissions
         base_fields = [
             'start_date',
+            'language',
         ]
         
         # Data fields - different for Managers vs Superusers
@@ -117,6 +127,7 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
             'authenticate_fitbit_button',
             'fetch_fitbit_data_button',
             'calculate_weekly_goals_button',
+            'send_weekly_message_button',
         ]
         return base_fields + data_fields + button_fields + tech_fields
 
