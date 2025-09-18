@@ -55,7 +55,7 @@ INSTALLED_APPS = [
     'core',
     'goals',
     'device_integration',
-    'auth_app.CustomAuthConfig',
+    #'auth_app.CustomAuthConfig',
 ]
 
 MIDDLEWARE = [
