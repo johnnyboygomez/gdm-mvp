@@ -187,7 +187,7 @@ def compute_weekly_target(participant, average_steps, week_start, week_end, last
         last_goal_data: Previous goal dictionary or None
     
     Returns:
-        dict: Goal data with increase, average_steps, new_target
+        dict: Goal data with increase, average_steps, new_target, previous_target
     """
     
     logger.info(f"Computing weekly target for participant {participant.id}, "
@@ -196,8 +196,11 @@ def compute_weekly_target(participant, average_steps, week_start, week_end, last
     
     # Determine if previous target was met
     target_was_met = True
+    previous_target = None
+    
     if last_goal_data:
-        target_was_met = average_steps >= last_goal_data.get("new_target", 0)
+        previous_target = last_goal_data.get("new_target", 0)
+        target_was_met = average_steps >= previous_target
     
     # Calculate new target
     increase_description, new_target = calculate_step_increase(
@@ -206,11 +209,12 @@ def compute_weekly_target(participant, average_steps, week_start, week_end, last
         target_was_met=target_was_met
     )
     
-    # Return goal data as dictionary
+    # Return goal data as dictionary - now includes previous_target
     goal_data = {
         "increase": increase_description,
         "average_steps": average_steps,
         "new_target": new_target,
+        "previous_target": previous_target,  # NEW: Include previous target
         "week_start": week_start.strftime("%Y-%m-%d"),
         "week_end": week_end.strftime("%Y-%m-%d"),
         "target_was_met": target_was_met if last_goal_data else None
@@ -218,7 +222,7 @@ def compute_weekly_target(participant, average_steps, week_start, week_end, last
     
     logger.info(f"Computed goal: {goal_data}")
     return goal_data
-
+    
 def get_step_data_for_week(daily_steps, week_start, week_end):
     """
     Extract and validate step data for a specific week.
@@ -267,10 +271,9 @@ def run_weekly_algorithm(participant):
     today = date.today()
     
     if not is_target_day(participant.start_date):
-    	logger.warning(f"Cannot calculate goals - today is not a target day")
-    	return None
+        logger.warning(f"Cannot calculate goals - today is not a target day")
+        return None
     
-    targets = participant.targets or {}
     daily_steps = participant.daily_steps or []
     
     # Calculate which week we're in since participant start
@@ -294,26 +297,28 @@ def run_weekly_algorithm(participant):
     logger.info(f"Analyzing week {analysis_week_start} to {analysis_week_end}")
     logger.info(f"Setting goal for week {target_week_start} to {target_week_end}")
     
-    # Get last goal data for comparison
+    # Get previous goal data - direct calculation approach
     last_goal_data = None
-    target_week_key = target_week_start.strftime("%Y-%m-%d")
-
-    if targets:
-        goal_dates = sorted(targets.keys())
-        if goal_dates:
-            # If we're updating the current week, don't use it for comparison
-            if goal_dates[-1] == target_week_key and len(goal_dates) > 1:
-                # Use the previous week's goal
-                last_goal_data = targets[goal_dates[-2]]
-            elif goal_dates[-1] != target_week_key:
-                # Use the most recent goal (different week)
-                last_goal_data = targets[goal_dates[-1]]
-            # If only one goal exists and it's this week, use first-week logic (last_goal_data remains None)
+    if weeks_since_start > 1:  # Only look for previous goal if we're past week 2
+        previous_week_start = target_week_start - timedelta(days=7)
+        previous_week_key = previous_week_start.strftime("%Y-%m-%d")
+        
+        if participant.targets:
+            last_goal_data = participant.targets.get(previous_week_key)
+            if last_goal_data:
+                logger.info(f"Found previous goal for week {previous_week_key}: {last_goal_data}")
+            else:
+                logger.info(f"No previous goal found for week {previous_week_key}")
+        
+        logger.info(f"Using previous goal data: {last_goal_data}")
+    else:
+        logger.info("Week 2 - using first week logic (no previous goal)")
     
     # Get step data for the completed week
     week_steps = get_step_data_for_week(daily_steps, analysis_week_start, analysis_week_end)
     logger.info(f"Found {len(week_steps)} days of step data for analysis week")
 
+    # Calculate goal based on available data
     if len(week_steps) >= 4:
         week_avg = sum(week_steps) // len(week_steps)
         logger.info(f"Calculated average: {week_avg} steps from {len(week_steps)} days")
@@ -326,25 +331,32 @@ def run_weekly_algorithm(participant):
             last_goal_data=last_goal_data
         )
     else:
+        # Handle insufficient data
         if last_goal_data:
             goal_data = {
                 "increase": "insufficient data - target maintained",
                 "average_steps": "insufficient data",
                 "new_target": last_goal_data["new_target"],
+                "previous_target": last_goal_data.get("new_target"),  # Set previous_target for consistency
                 "week_start": target_week_start.strftime("%Y-%m-%d"),
                 "week_end": target_week_end.strftime("%Y-%m-%d"),
                 "target_was_met": None
             }
+            logger.info("Insufficient step data - maintaining previous target")
         else:
             logger.error(f"First week with insufficient data for participant {participant.id}")
             return None
 
-    # Save to participant.targets JSON
+    # Save the goal to participant.targets - NOW INCLUDING previous_target
+    target_week_key = target_week_start.strftime("%Y-%m-%d")
+    targets = participant.targets or {}
     targets[target_week_key] = {
         "increase": goal_data["increase"],
         "average_steps": goal_data["average_steps"],
-        "new_target": goal_data["new_target"]
+        "new_target": goal_data["new_target"],
+        "previous_target": goal_data["previous_target"]  # NEW: Save previous_target to database
     }
+    
     participant.targets = targets
     participant.save(update_fields=["targets"])
     

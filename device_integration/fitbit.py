@@ -161,7 +161,12 @@ def fetch_fitbit_data_for_participant(participant_id):
             return {"error": resp.text}, resp.status_code
 
         steps = resp.json().get("activities-steps", [])
-        filtered_steps = [day for day in steps if int(day.get("value", 0)) > 0]  # filter out zero values
+        filtered_steps = [
+    		{"date": day["dateTime"], "value": day["value"]} 
+    		for day in steps 
+    		if int(day.get("value", 0)) > 0  # filter out zero values
+		]
+
         print(f"Fetched {len(filtered_steps)} days of steps (non-zero only)")
 
         participant.daily_steps = filtered_steps

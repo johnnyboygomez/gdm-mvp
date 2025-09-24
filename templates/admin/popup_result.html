@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Fitbit Authentication</title>
+    <title>Admin Response</title>
 </head>
 <body>
     {% if success %}
@@ -12,6 +12,12 @@
     {% else %}
         <h3>Operation failed: {{ error }}</h3>
     {% endif %}
+
+	{% if detailed_log %}
+    	<h4>Process Details:</h4>
+    	<pre style="background: #f9f9f9; padding: 10px; border: 1px solid #ddd; font-size: 11px; max-height: 300px; overflow-y: auto;">{{ detailed_log }}</pre>
+	{% endif %}
+
     <button onclick="window.close();">Close Window</button>
 </body>
 </html>

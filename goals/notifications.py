@@ -132,16 +132,9 @@ def create_email_content(participant, goal_data):
     new_target = goal_data.get('new_target')
     target_was_met = goal_data.get('target_was_met')
     
-    # Get previous target if available
-    previous_target = None
-    if target_was_met is not None:
-        # Find previous target from participant.targets
-        targets = participant.targets or {}
-        target_dates = sorted(targets.keys())
-        if len(target_dates) >= 2:
-            # Get second-to-last target (current week is last)
-            previous_target = targets[target_dates[-2]].get('new_target')
-    
+    # Get previous target directly from goal_data (calculated in targets.py)
+    previous_target = goal_data.get('previous_target')
+ 
     if language == 'fr':
         subject = "Résumé du nombre de pas et nouvel objectif"
         
@@ -241,7 +234,7 @@ def send_goal_notification(participant, goal_data):
         participant.save(update_fields=['message_history'])
         
         logger.info(f"Message logged for participant {participant.id}")
-        return True
+        return email_sent  # Return the actual email status
         
     except Exception as e:
         logger.error(f"Failed to send/log goal notification for {participant.user.email}: {e}")

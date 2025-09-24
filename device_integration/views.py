@@ -11,12 +11,12 @@ def fitbit_callback(request):
 
     participant, error = exchange_code_for_tokens(code, state)
     if participant:
-        return render(request, "fitbit/popup_result.html", {
+        return render(request, "admin/popup_result.html", {
             "success": True,
             "fitbit_id": participant.fitbit_user_id,
         })
     else:
-        return render(request, "fitbit/popup_result.html", {
+        return render(request, "admin/popup_result.html", {
             "success": False,
             "error": error,
         })
@@ -41,4 +41,4 @@ def fetch_fitbit_data(request, participant_id):
             "success": False,
             "error": result.get("error", "Unknown error")
         }
-    return render(request, "fitbit/popup_result.html", context)
+    return render(request, "admin/popup_result.html", context)

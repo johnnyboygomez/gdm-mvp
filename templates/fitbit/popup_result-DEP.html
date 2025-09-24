@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fitbit Authentication</title>
+</head>
+<body>
+    {% if success %}
+        <h3>
+            {% if fitbit_id %}Fitbit ID: {{ fitbit_id }}. {% endif %}
+            {% if message %}{{ message }}{% endif %}
+        </h3>
+    {% else %}
+        <h3>Operation failed: {{ error }}</h3>
+    {% endif %}
+    {% if log_details %}
+    <h4>Detailed Information:</h4>
+    <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; font-size: 12px;">{{ log_details }}</pre>
+	{% endif %}
+    <button onclick="window.close();">Close Window</button>
+</body>
+</html>

@@ -51,7 +51,7 @@ class Participant(models.Model):
         default='en',
         verbose_name='Language'
     )
-    
+    	
     message_history = models.JSONField(default=list, blank=True, help_text="History of messages sent to participant")
     
     device_type = models.CharField(

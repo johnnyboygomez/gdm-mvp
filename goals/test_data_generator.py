@@ -4,6 +4,8 @@ Simulates real-world syncing delays:
 - The possible number of days is [days_ago-2, days_ago-1, days_ago], always contiguous from the earliest day.
 - Goals: week 1 if at least 7 days; week 2 only for 14 days.
 - UPDATED: Creates data in Fitbit format: [{"date": "2025-09-03", "value": 2941}, {"date": "2025-09-04", "value": 3008}]
+- NEW: Adds realistic fluctuation with occasional "off days" and "great days"
+- UPDATED: Now includes previous_target field in expected goals
 """
 
 from datetime import date, timedelta
@@ -13,18 +15,53 @@ import csv
 import os
 
 def generate_step_values(base_steps, variation=200, num_days=7):
-    """Generate num_days of step values."""
+    """Generate num_days of step values with realistic daily fluctuation."""
     values = []
-    for _ in range(num_days):
+    for day in range(num_days):
+        # Start with normal variation
         steps = base_steps + random.randint(-variation, variation)
+        
+        # Add realistic fluctuation - some days are just different
+        fluctuation_chance = random.random()
+        
+        if fluctuation_chance < 0.15:  # 15% chance of "off day"
+            # Really low day (sick, busy, tired, etc.)
+            off_day_reduction = random.randint(int(steps * 0.3), int(steps * 0.6))
+            steps = max(steps - off_day_reduction, 500)  # Never below 500 steps
+            
+        elif fluctuation_chance < 0.25:  # 10% chance of "great day" 
+            # Exceptionally active day (weekend hike, extra motivation, etc.)
+            great_day_boost = random.randint(int(steps * 0.2), int(steps * 0.5))
+            steps += great_day_boost
+            
+        elif fluctuation_chance < 0.35:  # 10% chance of "lazy day"
+            # Moderately low day (rainy day, work from home, etc.)
+            lazy_reduction = random.randint(int(steps * 0.1), int(steps * 0.25))
+            steps = max(steps - lazy_reduction, 1000)
+            
+        elif fluctuation_chance < 0.45:  # 10% chance of "active day"
+            # Moderately high day (nice weather, meeting friends, etc.)
+            active_boost = random.randint(int(steps * 0.1), int(steps * 0.3))
+            steps += active_boost
+        
+        # Weekend effect - people often have different patterns on weekends
+        # Assuming start_date is known, we can simulate this
+        if day % 7 in [5, 6]:  # Approximate weekend days (Sat, Sun)
+            weekend_factor = random.choice([-0.15, -0.1, 0.1, 0.2, 0.3])  # Can go either way
+            weekend_change = int(steps * weekend_factor)
+            steps += weekend_change
+        
+        # Ensure minimum steps
         steps = max(1000, steps)
         values.append(steps)
+    
     return values
 
 def create_step_data(start_date, step_values):
     """Create step data in Fitbit format: [{"date": "2025-09-03", "value": 2941}]"""
     return [
         {
+        #
             "date": (start_date + timedelta(days=day)).strftime("%Y-%m-%d"),
             "value": steps
         }
@@ -34,17 +71,33 @@ def create_step_data(start_date, step_values):
 def calculate_average(step_values):
     return sum(step_values) // len(step_values)
 
-def predict_goal(average_steps, scenario="first_week"):
+def predict_goal(average_steps, scenario="first_week", previous_target=None):
+    """
+    Predict goal with previous_target field included.
+    
+    Args:
+        average_steps: Average steps for the week
+        scenario: "first_week" or "second_week" 
+        previous_target: The target from previous week (None for first week)
+    
+    Returns:
+        dict: Goal data including previous_target field
+    """
     if average_steps < 5000:
-        return {"increase": "500", "new_target": average_steps + 500, "average_steps": average_steps}
+        goal_data = {"increase": "500", "new_target": average_steps + 500, "average_steps": average_steps}
     elif average_steps < 7500:
-        return {"increase": "1000", "new_target": average_steps + 1000, "average_steps": average_steps}
+        goal_data = {"increase": "1000", "new_target": average_steps + 1000, "average_steps": average_steps}
     elif average_steps < 9000:
-        return {"increase": "1000", "new_target": average_steps + 1000, "average_steps": average_steps}
+        goal_data = {"increase": "1000", "new_target": average_steps + 1000, "average_steps": average_steps}
     elif average_steps < 10000:
-        return {"increase": "increase to 10000", "new_target": 10000, "average_steps": average_steps}
+        goal_data = {"increase": "increase to 10000", "new_target": 10000, "average_steps": average_steps}
     else:
-        return {"increase": "maintain", "new_target": average_steps, "average_steps": average_steps}
+        goal_data = {"increase": "maintain", "new_target": average_steps, "average_steps": average_steps}
+    
+    # Add previous_target field (None for first week, actual value for subsequent weeks)
+    goal_data["previous_target"] = previous_target
+    
+    return goal_data
 
 def generate_test_data(num_datasets=20, seed=42, days_ago=14):
     random.seed(seed)
@@ -72,18 +125,24 @@ def generate_test_data(num_datasets=20, seed=42, days_ago=14):
         test_name = f"Dataset_{i+1:02d}_{profile['name']}_{actual_days}days"
 
         expected_goals = {}
+        previous_week_target = None  # Track previous target for chaining
+        
         # Always calculate week 1 target if at least 7 days of data
         if actual_days >= 7:
             week1 = step_values[:7]
             week1_avg = calculate_average(week1)
             goal_date_1 = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
-            expected_goals[goal_date_1] = predict_goal(week1_avg, "first_week")
+            week1_goal = predict_goal(week1_avg, "first_week", previous_target=None)
+            expected_goals[goal_date_1] = week1_goal
+            previous_week_target = week1_goal["new_target"]  # Store for next week
+            
         # Only calculate week 2 target if there are 14 days
         if actual_days == 14:
             week2 = step_values[7:14]
             week2_avg = calculate_average(week2)
             goal_date_2 = (start_date + timedelta(days=14)).strftime("%Y-%m-%d")
-            expected_goals[goal_date_2] = predict_goal(week2_avg, "second_week")
+            week2_goal = predict_goal(week2_avg, "second_week", previous_target=previous_week_target)
+            expected_goals[goal_date_2] = week2_goal
 
         all_test_results[test_name] = {
             "step_data": step_data,
@@ -142,15 +201,17 @@ def get_user_input():
     return seed, datasets, days_ago
 
 def main():
-    print("Step Data Generator (with random real-world syncing)")
-    print("===================")
+    print("Step Data Generator (with realistic daily fluctuation)")
+    print("====================================================")
     seed, num_datasets, days_ago = get_user_input()
-    output_filename = f"step_goals_test_data_{num_datasets}datasets.csv"
+    output_filename = f"step_goals_datasets.csv"
     print(f"\nGenerating {num_datasets} datasets with seed {seed} and up to {days_ago} days of data each...")
+    print("Features: Off days, great days, weekend effects, natural variation, and previous_target tracking")
     all_test_results = generate_test_data(num_datasets, seed, days_ago)
     filename = save_to_csv(all_test_results, output_filename)
     print(f"\n✅ Complete!")
     print(f"Generated {len(all_test_results)} datasets with {days_ago} possible days (each has 7 to {days_ago})")
+    print(f"Each expected goal now includes previous_target field")
     print(f"Saved to: {filename}")
 
 if __name__ == "__main__":

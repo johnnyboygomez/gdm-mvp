@@ -1,0 +1,38 @@
+{% extends "admin/base.html" %}
+
+{% block title %}My Awesome Site Admin{% endblock %}
+
+{% block site_title %}My Awesome Site Admin{% endblock %}
+
+{% block site_header %}My Awesome Site Admin{% endblock %}
+
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">My Awesome Site Admin</a></h1>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+/* Hide only the sidebar search box, keep all navigation */
+#nav-filter {
+    display: none !important;
+}
+
+/* Hide the search input container */
+.nav-sidebar-search {
+    display: none !important;
+}
+
+/* Alternative selector if the above doesn't work */
+#nav-sidebar input[type="text"] {
+    display: none !important;
+}
+
+/* Hide any search-related labels or containers */
+#nav-sidebar .search {
+    display: none !important;
+}
+</style>
+{% endblock %}

@@ -10,6 +10,12 @@ import json
 # Import your custom forms
 from .forms import CustomUserCreationForm, CustomUserChangeForm
 
+# In your admin.py
+admin.site.site_header = "Partner T2D Study"
+admin.site.site_title = "Partner T2D Study Portal"
+admin.site.index_title = "Welcome to Partner T2D Study Administration"
+
+
 ###############
 # Mixin with shared button methods
 class ParticipantButtonMixin:
@@ -39,14 +45,44 @@ class ParticipantButtonMixin:
         return "Save participant first"
     authenticate_fitbit_button.short_description = "Fitbit Authentication"
 
-    def send_weekly_message_button(self, obj):
-        if obj.pk:
-            url = reverse("goals:send_weekly_message", args=[obj.pk])
+    def send_notification_button(self, obj):
+        """Button to send goal notification - only enabled if recent goals exist"""
+        if not obj.pk:
+            return "Save participant first"
+        
+        from datetime import date, timedelta
+        
+        # Check if there's a goal from today or yesterday
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        
+        today_key = today.strftime("%Y-%m-%d")
+        yesterday_key = yesterday.strftime("%Y-%m-%d")
+        
+        targets = obj.targets or {}
+        recent_goal = None
+        goal_date = None
+        
+        # Check today first, then yesterday
+        if today_key in targets and targets[today_key].get('new_target'):
+            recent_goal = targets[today_key]
+            goal_date = today_key
+        elif yesterday_key in targets and targets[yesterday_key].get('new_target'):
+            recent_goal = targets[yesterday_key]
+            goal_date = yesterday_key
+        
+        if recent_goal:
+            url = reverse("goals:send_notification", args=[obj.pk])
             return format_html(
-                '<a class="button" href="{}" target="_blank">Send Weekly Message</a>', url
+                '<a class="button" href="{}" target="_blank">Send Notification ({})</a>', 
+                url, goal_date
             )
-        return "Save participant first"
-    send_weekly_message_button.short_description = "Send Weekly Message"
+        else:
+            return format_html(
+                '<span style="color: #666; font-style: italic;">No recent goals to notify about</span>'
+            )
+
+    send_notification_button.short_description = "Send Goal Notification"
 
 ###############
 # Inline for Participant
@@ -65,7 +101,7 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
         'authenticate_fitbit_button',
         'fetch_fitbit_data_button',
         'calculate_weekly_goals_button',
-        'send_weekly_message_button',
+        'send_notification_button',
     ]
     
     def get_readonly_fields(self, request, obj=None):
@@ -127,7 +163,7 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
             'authenticate_fitbit_button',
             'fetch_fitbit_data_button',
             'calculate_weekly_goals_button',
-            'send_weekly_message_button',
+            'send_notification_button',
         ]
         return base_fields + data_fields + button_fields + tech_fields
 
@@ -155,6 +191,9 @@ class CustomUserAdmin(DefaultUserAdmin):
     add_form = CustomUserCreationForm
     form = CustomUserChangeForm
     model = CustomUser
+    
+    # Disable the top “Start typing to filter” box
+    search_fields = []  # make sure it’s empty
 
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
@@ -174,7 +213,7 @@ class CustomUserAdmin(DefaultUserAdmin):
     
     ordering = ('email',)
     list_display = ('email', 'participant_start_date', 'is_active', 'is_staff')
-    list_filter = ('is_active', 'is_staff', 'is_superuser', 'participant__start_date', 'participant__device_type')
+    #list_filter = ('is_active', 'is_staff', 'is_superuser', 'participant__start_date', 'participant__device_type')
     search_fields = ('email', 'first_name', 'last_name')
     inlines = [ParticipantInline]
 
