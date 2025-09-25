@@ -42,6 +42,25 @@
       padding: 8px;
       text-align: center;
     }
+    .error-cell {
+      text-align: center;
+      padding: 8px;
+      width: 80px;
+    }
+    .error-icon {
+      color: #dc3545;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .error-icon:hover {
+      color: #b02a37;
+    }
+    .no-error {
+      color: #28a745;
+      font-size: 16px;
+    }
   </style>
   <h1>Custom Admin Dashboard - Blocks by Day</h1>
   <p>
@@ -69,6 +88,7 @@
             <thead>
               <tr>
                 <th>Email</th>
+                <th>Errors</th>
                 {% for day in group.header_days %}
                   <th>{{ day|date:"D" }}<br><small>{{ day|date:"m/d" }}</small></th>
                 {% endfor %}
@@ -83,6 +103,15 @@
                         style="color: #007cba; text-decoration: none;">
                        {{ p.email }}
                      </a>
+                   </td>
+                   <td class="error-cell">
+                     {% if p.has_errors %}
+                       <a href="{% url 'participant_detail' p.participant_id %}" class="error-icon">
+                         ✗
+                       </a>
+                     {% else %}
+                       <span class="no-error">✓</span>
+                     {% endif %}
                    </td>
                   {% for cell in p.steps_with_classes %}
                     <td class="step-cell {{ cell.class }}">
@@ -110,6 +139,7 @@
             <thead>
               <tr>
                 <th>Email</th>
+                <th>Errors</th>
                 {% for day in group.header_days %}
                   <th>{{ day|date:"D" }}<br><small>{{ day|date:"m/d" }}</small></th>
                 {% endfor %}
@@ -119,6 +149,7 @@
             <tbody>
               <tr>
                 <td>No participants</td>
+                <td class="error-cell">-</td>
                 {% for day in group.header_days %}
                   <td class="step-cell no-data-future">-</td>
                 {% endfor %}

@@ -13,6 +13,40 @@
       border-radius: 5px;
       border-left: 4px solid #007cba;
     }
+    .error-section {
+      background-color: #fff3cd;
+      border: 1px solid #ffeaa7;
+      border-radius: 5px;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-left: 4px solid #dc3545;
+    }
+    .error-section.no-errors {
+      background-color: #d4edda;
+      border-color: #c3e6cb;
+      border-left-color: #28a745;
+    }
+    .error-item {
+      margin-bottom: 10px;
+      padding: 8px;
+      background-color: #f8d7da;
+      border-radius: 3px;
+      border-left: 3px solid #dc3545;
+    }
+    .error-type {
+      font-weight: bold;
+      color: #721c24;
+    }
+    .error-message {
+      margin-top: 5px;
+      font-size: 0.9em;
+      color: #721c24;
+    }
+    .error-timestamp {
+      font-size: 0.8em;
+      color: #6c757d;
+      margin-top: 3px;
+    }
     .chart-container {
       background-color: white;
       border: 1px solid #ddd;
@@ -112,6 +146,41 @@
     </div>
   </div>
 
+  <!-- Error Status Section -->
+  <div class="content-section">
+    {% if error_info.has_errors %}
+      <div class="error-section">
+        <h2 style="color: #721c24; margin-top: 0;">⚠️ System Errors Detected</h2>
+        <p style="margin-bottom: 15px;">This participant has the following active errors:</p>
+        
+        {% if error_info.fitbit_data_error %}
+          <div class="error-item">
+            <div class="error-type">Fitbit Data Fetch Error</div>
+            <div class="error-message">{{ error_info.fitbit_data_error.message }}</div>
+            {% if error_info.fitbit_data_error.timestamp %}
+              <div class="error-timestamp">Last occurred: {{ error_info.fitbit_data_error.timestamp }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
+        
+        {% if error_info.fitbit_token_error %}
+          <div class="error-item">
+            <div class="error-type">Fitbit Token Refresh Error</div>
+            <div class="error-message">{{ error_info.fitbit_token_error.message }}</div>
+            {% if error_info.fitbit_token_error.timestamp %}
+              <div class="error-timestamp">Last occurred: {{ error_info.fitbit_token_error.timestamp }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="error-section no-errors">
+        <h2 style="color: #155724; margin-top: 0;">✓ No Active Errors</h2>
+        <p style="margin-bottom: 0;">All systems are functioning normally for this participant.</p>
+      </div>
+    {% endif %}
+  </div>
+
   <div class="content-section">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
       <h2>Daily Steps Chart</h2>
@@ -180,6 +249,17 @@
                   Not set
                 {% endif %}
               </div>
+              
+              <div class="info-label">Message:</div>
+			  <div>
+  				{% if summary.message_content %}
+    			<div style="background: #f8f9fa; border-radius: 3px; padding: 8px; font-style: italic; color: #444;">
+      				{{ summary.message_content|linebreaksbr }}
+    			</div>
+  				{% else %}
+    				<span style="color: #999;">No message found for this week.</span>
+  				{% endif %}
+			</div>
             </div>
           </div>
         {% endfor %}

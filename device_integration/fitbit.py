@@ -3,7 +3,6 @@
 import requests
 import logging
 import base64
-import uuid
 from datetime import datetime, timedelta
 from django.conf import settings
 from django.utils import timezone
@@ -47,7 +46,6 @@ def refresh_fitbit_tokens(participant):
     participant.save(update_fields=["fitbit_access_token", "fitbit_refresh_token", "fitbit_token_expires"])
 
     return participant.fitbit_access_token
- 
 
 ###############
 # Authorization URL
@@ -124,7 +122,6 @@ def exchange_code_for_tokens(code, state):
 
 ###############
 # Fetch Fitbit steps
-
 def fetch_fitbit_data_for_participant(participant_id):
     print(f"--- Starting fetch for participant {participant_id} ---")
     
@@ -148,10 +145,14 @@ def fetch_fitbit_data_for_participant(participant_id):
                 print(f"Error refreshing token: {e}")
                 return {"error": str(e)}, 400
 
-        # Fetch steps
-        start_date = participant.start_date
-        end_date = start_date + timedelta(days=1095)
-        url = f"https://api.fitbit.com/1/user/-/activities/steps/date/{start_date}/{end_date}.json"
+        # Fetch from 1 week before start to today (or end of study period)
+        start_fetch_date = participant.start_date - timedelta(days=7)
+        end_fetch_date = min(
+            timezone.now().date(), 
+            participant.start_date + timedelta(days=365)  # Max 1 year study
+        )
+
+        url = f"https://api.fitbit.com/1/user/-/activities/steps/date/{start_fetch_date}/{end_fetch_date}.json"
         headers = {"Authorization": f"Bearer {access_token}"}
         print(f"Fetching Fitbit data from: {url}")
 
@@ -162,10 +163,10 @@ def fetch_fitbit_data_for_participant(participant_id):
 
         steps = resp.json().get("activities-steps", [])
         filtered_steps = [
-    		{"date": day["dateTime"], "value": day["value"]} 
-    		for day in steps 
-    		if int(day.get("value", 0)) > 0  # filter out zero values
-		]
+            {"date": day["dateTime"], "value": day["value"]} 
+            for day in steps 
+            if int(day.get("value", 0)) > 0  # filter out zero values
+        ]
 
         print(f"Fetched {len(filtered_steps)} days of steps (non-zero only)")
 
@@ -181,7 +182,6 @@ def fetch_fitbit_data_for_participant(participant_id):
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
         return {"error": "Internal server error"}, 500
-
 
 ###############
 # Add a device account

@@ -10,6 +10,23 @@ import json
 def get_next_target_day(start_date):
     today = date.today()
     delta_days = (today - start_date).days
+    
+    # Calculate which week they're in and when their next target day is
+    weeks = delta_days // 7
+    return start_date + timedelta(days=7 * (weeks + 1))
+    
+# core/admin_dashboard_views.py
+from datetime import date, timedelta, datetime
+from django.contrib.admin.views.decorators import staff_member_required
+from django.shortcuts import render
+from django.http import Http404
+from .models import Participant
+from collections import defaultdict
+import json
+
+def get_next_target_day(start_date):
+    today = date.today()
+    delta_days = (today - start_date).days
     if delta_days < 7:
         return None
     weeks = delta_days // 7
@@ -31,16 +48,14 @@ def dashboard_view(request):
     for p in raw_participants:
         next_target = get_next_target_day(p.start_date)
         if not next_target:
-            continue  # Skip this participant (not enough days yet)
+            continue
         days_diff = (next_target - today).days
         if 0 <= days_diff < max_days:
             # Parse the daily_steps data (Fitbit format)
             daily_steps_data = {}
             if p.daily_steps:
                 try:
-                    # Handle case where it might already be a list (Fitbit format)
                     if isinstance(p.daily_steps, list):
-                        # Convert Fitbit format to dictionary for easier lookup
                         for entry in p.daily_steps:
                             date_key = entry.get('date')
                             steps_value = entry.get('value')
@@ -51,10 +66,8 @@ def dashboard_view(request):
                         daily_steps_data = p.daily_steps
                         print(f"DEBUG: daily_steps is already a dict: {daily_steps_data}")
                     else:
-                        # Try to parse as JSON string
                         parsed_data = json.loads(p.daily_steps)
                         if isinstance(parsed_data, list):
-                            # Fitbit format
                             for entry in parsed_data:
                                 date_key = entry.get('date')
                                 steps_value = entry.get('value')
@@ -70,18 +83,17 @@ def dashboard_view(request):
             else:
                 print(f"DEBUG: No daily_steps data for {p.user.email}")
             
+            # MODIFIED: Store the full participant object for later use
             groups[days_diff].append({
                 "email": p.user.email,
                 "next_target_day": next_target,
                 "daily_steps": daily_steps_data,
                 "participant_id": p.id,
+                "participant_obj": p,  # ADD THIS LINE
             })
     
     for days in groups.keys():
-        # Use the first participant's target day as the anchor
         block_date = groups[days][0]['next_target_day'] if groups[days] else today + timedelta(days=days)
-        # Create the 7 days BEFORE the target day (the days the calculation is based on)
-        # If target is Tuesday, show: [Tue(prev week), Wed, Thu, Fri, Sat, Sun, Mon]
         header_days[days] = [block_date - timedelta(days=delta) for delta in range(7, 0, -1)]
         print(f"DEBUG: Target day: {block_date.strftime('%Y-%m-%d %A')}")
         print(f"DEBUG: Header days: {[d.strftime('%Y-%m-%d %A') for d in header_days[days]]}")
@@ -90,7 +102,6 @@ def dashboard_view(request):
     for days in range(max_days):
         if days not in header_days:
             block_date = today + timedelta(days=days)
-            # For empty groups, still show the 7 days before the target
             header_days[days] = [block_date - timedelta(days=delta) for delta in range(7, 0, -1)]
             print(f"DEBUG: Empty group target day: {block_date.strftime('%Y-%m-%d %A')}")
             print(f"DEBUG: Empty group header days: {[d.strftime('%Y-%m-%d %A') for d in header_days[days]]}")
@@ -106,6 +117,9 @@ def dashboard_view(request):
         # Process participants to include step data for each day
         processed_participants = []
         for p in participants:
+            # MODIFIED: Get the participant object from the stored data
+            participant = p['participant_obj']  # ADD THIS LINE
+            
             steps_for_days = []
             cell_classes = []
             print(f"DEBUG: Processing participant {p['email']}")
@@ -131,22 +145,20 @@ def dashboard_view(request):
                 if steps != '-':
                     cell_classes.append('has-data')
                 else:
-                    # No data - determine background color based on conditions
                     if day > today:
-                        # Future day
                         cell_classes.append('no-data-future')
-                    elif days <= 1:  # Today or tomorrow block
+                    elif days <= 1:
                         if data_count < 4:
-                            cell_classes.append('no-data-critical')  # red
+                            cell_classes.append('no-data-critical')
                         else:
-                            cell_classes.append('no-data-warning')   # orangered
-                    elif days <= 3:  # 2-3 days from today
+                            cell_classes.append('no-data-warning')
+                    elif days <= 3:
                         if data_count < 3:
-                            cell_classes.append('no-data-alert')     # orange
+                            cell_classes.append('no-data-alert')
                         else:
-                            cell_classes.append('no-data-caution')   # khaki
-                    else:  # 4+ days from today
-                        cell_classes.append('no-data-caution')       # khaki
+                            cell_classes.append('no-data-caution')
+                    else:
+                        cell_classes.append('no-data-caution')
             
             # Combine steps and classes into a single list for easier template iteration
             steps_with_classes = []
@@ -159,12 +171,18 @@ def dashboard_view(request):
             print(f"DEBUG: Final steps_for_days: {steps_for_days}")
             print(f"DEBUG: Cell classes: {cell_classes}")
             
+            # MODIFIED: Add error checking using the participant object
             processed_participants.append({
                 'email': p['email'],
                 'next_target_day': p['next_target_day'],
                 'participant_id': p['participant_id'],
                 'steps_with_classes': steps_with_classes,
                 'data_count': data_count,
+                # ADD THESE LINES:
+                'has_errors': (
+                    participant.status_flags.get('fetch_fitbit_data_fail', False) or 
+                    participant.status_flags.get('refresh_fitbit_token_fail', False)
+                ),
             })
         
         grouped_participants_with_headers.append({
@@ -181,7 +199,7 @@ def dashboard_view(request):
         "user": request.user,
     }
     return render(request, "admin/dashboard.html", context)
-
+    
 @staff_member_required
 def participant_detail_view(request, participant_id):
     """Custom participant detail page showing raw daily_steps data"""
@@ -196,16 +214,40 @@ def participant_detail_view(request, participant_id):
     # Calculate weekly summaries
     weekly_summaries = calculate_weekly_summaries(participant)
     
+    # ADD THIS SECTION - Extract error information
+    error_info = {
+        'has_errors': False,
+        'fitbit_data_error': None,
+        'fitbit_token_error': None,
+    }
+    
+    # Check for Fitbit data fetch errors
+    if participant.status_flags.get('fetch_fitbit_data_fail'):
+        error_info['has_errors'] = True
+        error_info['fitbit_data_error'] = {
+            'message': participant.status_flags.get('fetch_fitbit_data_last_error', 'Unknown error'),
+            'timestamp': participant.status_flags.get('fetch_fitbit_data_last_error_time')
+        }
+    
+    # Check for Fitbit token refresh errors
+    if participant.status_flags.get('refresh_fitbit_token_fail'):
+        error_info['has_errors'] = True
+        error_info['fitbit_token_error'] = {
+            'message': participant.status_flags.get('refresh_fitbit_token_last_error', 'Unknown error'),
+            'timestamp': participant.status_flags.get('refresh_fitbit_token_last_error_time')
+        }
+    
     context = {
         "participant": participant,
         "is_superuser": is_superuser,
         "is_manager": is_manager,
         "user": request.user,
         "weekly_summaries": weekly_summaries,
+        "error_info": error_info,  # ADD THIS LINE
     }
     
     return render(request, "admin/participant_detail.html", context)
-
+    
 def calculate_weekly_summaries(participant):
     """Calculate weekly summaries based on participant.targets JSON only"""
     summaries = []
@@ -218,6 +260,18 @@ def calculate_weekly_summaries(participant):
     
     # Sort target dates to process them chronologically
     target_dates = sorted(targets.keys())
+    
+    # Build a lookup for messages
+    messages = getattr(participant, "message_history", [])
+    message_lookup = {}
+    for msg in messages:
+        gd = msg.get("goal_data", {})
+        key = (
+            gd.get("new_target"),
+            gd.get("average_steps"),
+            gd.get("target_was_met"),
+        )
+        message_lookup[key] = msg.get("content")
     
     for i, target_date_str in enumerate(target_dates):
         target_data = targets[target_date_str]
@@ -233,14 +287,32 @@ def calculate_weekly_summaries(participant):
         
         if i > 0:
             # Look at the previous target entry to see what the goal was
-            previous_target_data = targets[target_dates[i-1]]
+            previous_target_data = targets[target_dates[i - 1]]
             previous_week_target = previous_target_data.get('new_target')
             
             # Check if goal was met by comparing average_steps to previous target
             current_average = target_data.get('average_steps')
             if previous_week_target and current_average is not None:
-                goal_met = current_average >= previous_week_target
-        
+                # Handle "insufficient data" case
+                if current_average == "insufficient data":
+                    goal_met = None
+                else:
+                    try:
+                        # Convert both to numbers for comparison
+                        current_avg_num = float(current_average)
+                        previous_target_num = float(previous_week_target)
+                        goal_met = current_avg_num >= previous_target_num
+                    except (ValueError, TypeError):
+                        goal_met = None
+
+            # Find matching message (use None for missing values to match with message keys)
+        key = (
+            target_data.get('new_target'),
+           	target_data.get('average_steps'),
+            goal_met,
+        	)
+        message_content = message_lookup.get(key, "")
+
         summary = {
             'week_start': week_start,
             'week_end': week_end,
@@ -250,6 +322,7 @@ def calculate_weekly_summaries(participant):
             'goal_met': goal_met,
             'new_increase': target_data.get('increase'),
             'new_target': target_data.get('new_target'),
+            'message_content': message_content,
         }
         
         summaries.append(summary)
