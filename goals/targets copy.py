@@ -1,6 +1,5 @@
 # goals/targets.py
 from datetime import datetime, date, timedelta
-from django.utils import timezone
 import logging
 import json
 
@@ -215,7 +214,7 @@ def compute_weekly_target(participant, average_steps, week_start, week_end, last
         "increase": increase_description,
         "average_steps": average_steps,
         "new_target": new_target,
-        "previous_target": previous_target,
+        "previous_target": previous_target,  # NEW: Include previous target
         "week_start": week_start.strftime("%Y-%m-%d"),
         "week_end": week_end.strftime("%Y-%m-%d"),
         "target_was_met": target_was_met if last_goal_data else None
@@ -275,125 +274,91 @@ def run_weekly_algorithm(participant):
         logger.warning(f"Cannot calculate goals - today is not a target day")
         return None
     
-    try:
-        daily_steps = participant.daily_steps or []
+    daily_steps = participant.daily_steps or []
+    
+    # Calculate which week we're in since participant start
+    days_since_start = (today - participant.start_date).days
+    weeks_since_start = days_since_start // 7
+    
+    # Still in first week - no complete week to analyze yet
+    if weeks_since_start == 0:
+        logger.info(f"Still in first week (day {days_since_start}), no complete week to analyze")
+        return None
+    
+    # Calculate the most recently completed week to analyze
+    completed_week_number = weeks_since_start - 1
+    analysis_week_start = participant.start_date + timedelta(days=completed_week_number * 7)
+    analysis_week_end = analysis_week_start + timedelta(days=6)
+    
+    # Calculate the current week (where we set the goal)
+    target_week_start = participant.start_date + timedelta(days=weeks_since_start * 7)
+    target_week_end = target_week_start + timedelta(days=6)
+    
+    logger.info(f"Analyzing week {analysis_week_start} to {analysis_week_end}")
+    logger.info(f"Setting goal for week {target_week_start} to {target_week_end}")
+    
+    # Get previous goal data - direct calculation approach
+    last_goal_data = None
+    if weeks_since_start > 1:  # Only look for previous goal if we're past week 2
+        previous_week_start = target_week_start - timedelta(days=7)
+        previous_week_key = previous_week_start.strftime("%Y-%m-%d")
         
-        # Calculate which week we're in since participant start
-        days_since_start = (today - participant.start_date).days
-        weeks_since_start = days_since_start // 7
-        
-        # Still in first week - no complete week to analyze yet
-        if weeks_since_start == 0:
-            logger.info(f"Still in first week (day {days_since_start}), no complete week to analyze")
-            return None
-        
-        # Calculate the most recently completed week to analyze
-        completed_week_number = weeks_since_start - 1
-        analysis_week_start = participant.start_date + timedelta(days=completed_week_number * 7)
-        analysis_week_end = analysis_week_start + timedelta(days=6)
-        
-        # Calculate the current week (where we set the goal)
-        target_week_start = participant.start_date + timedelta(days=weeks_since_start * 7)
-        target_week_end = target_week_start + timedelta(days=6)
-        
-        logger.info(f"Analyzing week {analysis_week_start} to {analysis_week_end}")
-        logger.info(f"Setting goal for week {target_week_start} to {target_week_end}")
-        
-        # Get previous goal data - direct calculation approach
-        last_goal_data = None
-        if weeks_since_start > 1:  # Only look for previous goal if we're past week 2
-            previous_week_start = target_week_start - timedelta(days=7)
-            previous_week_key = previous_week_start.strftime("%Y-%m-%d")
-            
-            if participant.targets:
-                last_goal_data = participant.targets.get(previous_week_key)
-                if last_goal_data:
-                    logger.info(f"Found previous goal for week {previous_week_key}: {last_goal_data}")
-                else:
-                    # TRACK ERROR: Missing previous goal when expected
-                    error_msg = f"Missing previous goal data for week {previous_week_key}"
-                    logger.warning(error_msg)
-                    participant.status_flags["target_calculation_fail"] = True
-                    participant.status_flags["target_calculation_last_error"] = error_msg
-                    participant.status_flags["target_calculation_last_error_time"] = timezone.now().isoformat()
-                    participant.save(update_fields=["status_flags"])
-            
-            logger.info(f"Using previous goal data: {last_goal_data}")
-        else:
-            logger.info("Week 2 - using first week logic (no previous goal)")
-        
-        # Get step data for the completed week
-        week_steps = get_step_data_for_week(daily_steps, analysis_week_start, analysis_week_end)
-        logger.info(f"Found {len(week_steps)} days of step data for analysis week")
-
-        # Calculate goal based on available data
-        if len(week_steps) >= 4:
-            week_avg = sum(week_steps) // len(week_steps)
-            logger.info(f"Calculated average: {week_avg} steps from {len(week_steps)} days")
-            
-            goal_data = compute_weekly_target(
-                participant=participant, 
-                average_steps=week_avg,
-                week_start=target_week_start,
-                week_end=target_week_end,
-                last_goal_data=last_goal_data
-            )
-            
-            # SUCCESS - Clear any previous errors
-            participant.status_flags["target_calculation_fail"] = False
-            participant.status_flags.pop("target_calculation_last_error", None)
-            participant.status_flags.pop("target_calculation_last_error_time", None)
-            
-        else:
-            # TRACK ERROR: Insufficient data
-            error_msg = f"Insufficient step data: only {len(week_steps)} days available (need 4+)"
-            logger.warning(error_msg)
-            
-            participant.status_flags["target_calculation_fail"] = True
-            participant.status_flags["target_calculation_last_error"] = error_msg
-            participant.status_flags["target_calculation_last_error_time"] = timezone.now().isoformat()
-            
-            # Handle insufficient data
+        if participant.targets:
+            last_goal_data = participant.targets.get(previous_week_key)
             if last_goal_data:
-                goal_data = {
-                    "increase": "insufficient data - target maintained",
-                    "average_steps": "insufficient data",
-                    "new_target": last_goal_data["new_target"],
-                    "previous_target": last_goal_data.get("new_target"),
-                    "week_start": target_week_start.strftime("%Y-%m-%d"),
-                    "week_end": target_week_end.strftime("%Y-%m-%d"),
-                    "target_was_met": None
-                }
-                logger.info("Insufficient step data - maintaining previous target")
+                logger.info(f"Found previous goal for week {previous_week_key}: {last_goal_data}")
             else:
-                logger.error(f"First week with insufficient data for participant {participant.id}")
-                participant.save(update_fields=["status_flags"])
-                return None
+                logger.info(f"No previous goal found for week {previous_week_key}")
+        
+        logger.info(f"Using previous goal data: {last_goal_data}")
+    else:
+        logger.info("Week 2 - using first week logic (no previous goal)")
+    
+    # Get step data for the completed week
+    week_steps = get_step_data_for_week(daily_steps, analysis_week_start, analysis_week_end)
+    logger.info(f"Found {len(week_steps)} days of step data for analysis week")
 
-        # Save the goal to participant.targets
-        target_week_key = target_week_start.strftime("%Y-%m-%d")
-        targets = participant.targets or {}
-        targets[target_week_key] = {
-            "increase": goal_data["increase"],
-            "average_steps": goal_data["average_steps"],
-            "new_target": goal_data["new_target"],
-            "previous_target": goal_data["previous_target"]
-        }
+    # Calculate goal based on available data
+    if len(week_steps) >= 4:
+        week_avg = sum(week_steps) // len(week_steps)
+        logger.info(f"Calculated average: {week_avg} steps from {len(week_steps)} days")
         
-        participant.targets = targets
-        participant.save(update_fields=["targets", "status_flags"])
-        
-        logger.info(f"Successfully created and saved weekly goal: {goal_data}")
-        return goal_data
-        
-    except Exception as e:
-        # TRACK ERROR: Unexpected exception
-        error_msg = f"Unexpected error during target calculation: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        
-        participant.status_flags["target_calculation_fail"] = True
-        participant.status_flags["target_calculation_last_error"] = error_msg
-        participant.status_flags["target_calculation_last_error_time"] = timezone.now().isoformat()
-        participant.save(update_fields=["status_flags"])
-        
-        raise  # Re-raise to let caller handle
+        goal_data = compute_weekly_target(
+            participant=participant, 
+            average_steps=week_avg,
+            week_start=target_week_start,
+            week_end=target_week_end,
+            last_goal_data=last_goal_data
+        )
+    else:
+        # Handle insufficient data
+        if last_goal_data:
+            goal_data = {
+                "increase": "insufficient data - target maintained",
+                "average_steps": "insufficient data",
+                "new_target": last_goal_data["new_target"],
+                "previous_target": last_goal_data.get("new_target"),  # Set previous_target for consistency
+                "week_start": target_week_start.strftime("%Y-%m-%d"),
+                "week_end": target_week_end.strftime("%Y-%m-%d"),
+                "target_was_met": None
+            }
+            logger.info("Insufficient step data - maintaining previous target")
+        else:
+            logger.error(f"First week with insufficient data for participant {participant.id}")
+            return None
+
+    # Save the goal to participant.targets - NOW INCLUDING previous_target
+    target_week_key = target_week_start.strftime("%Y-%m-%d")
+    targets = participant.targets or {}
+    targets[target_week_key] = {
+        "increase": goal_data["increase"],
+        "average_steps": goal_data["average_steps"],
+        "new_target": goal_data["new_target"],
+        "previous_target": goal_data["previous_target"]  # NEW: Save previous_target to database
+    }
+    
+    participant.targets = targets
+    participant.save(update_fields=["targets"])
+    
+    logger.info(f"Successfully created and saved weekly goal: {goal_data}")
+    return goal_data

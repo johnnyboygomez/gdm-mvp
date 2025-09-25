@@ -119,31 +119,41 @@ def get_random_tip(language, goal_met):
 def create_email_content(participant, goal_data):
     """
     Create bilingual email content based on participant's language preference.
-    
-    Args:
-        participant: Participant instance
-        goal_data: Dictionary containing goal information
-    
-    Returns:
-        tuple: (subject, message_body)
     """
     language = participant.language
     average_steps = goal_data.get('average_steps')
     new_target = goal_data.get('new_target')
     target_was_met = goal_data.get('target_was_met')
-    
-    # Get previous target directly from goal_data (calculated in targets.py)
     previous_target = goal_data.get('previous_target')
- 
+    
+    # Handle insufficient data case
+    if average_steps == "insufficient data":
+        if language == 'fr':
+            subject = "Objectif de pas maintenu"
+            message_lines = [
+                "Nous n'avons pas suffisamment de données de pas cette semaine.",
+                f"Votre objectif reste {new_target} pas par jour."
+            ]
+            tip = get_random_tip('fr', None)
+            message_lines.append(f"\n{tip}")
+        else:
+            subject = "Step Target Maintained"
+            message_lines = [
+                "We don't have enough step data from this week.",
+                f"Your target remains {new_target} steps per day."
+            ]
+            tip = get_random_tip('en', None)
+            message_lines.append(f"\n{tip}")
+        
+        return subject, "\n".join(message_lines)
+    
+    # Normal case with valid step data
     if language == 'fr':
         subject = "Résumé du nombre de pas et nouvel objectif"
-        
-        # Build French message
         message_lines = [
             f"La semaine dernière vous avez fait un moyen de {average_steps} pas par jour."
         ]
         
-        # Add comparison to previous week (skip for first week)
         if target_was_met is not None and previous_target:
             if target_was_met:
                 message_lines.append(f"Vous avez fait plus que le but de la semaine dernière qui était {previous_target} pas par jours.")
@@ -151,33 +161,26 @@ def create_email_content(participant, goal_data):
                 message_lines.append(f"Vous avez fait moins que le but de la semaine dernière qui était {previous_target} pas par jours.")
         
         message_lines.append(f"Cela signifie que votre objectif pour la semaine prochaine est {new_target} pas par jour.")
-        
-        # Add tip
         tip = get_random_tip('fr', target_was_met)
         message_lines.append(f"\n{tip}")
         
-    else:  # English
+    else:
         subject = "Step Count Summary and New Target"
-        
-        # Build English message
         message_lines = [
             f"Last week you did an average of {average_steps} steps per day."
         ]
         
-        # Add comparison to previous week (skip for first week)
         if target_was_met is not None and previous_target:
             comparison = "more" if target_was_met else "less"
             message_lines.append(f"This was {comparison} than last week's target of {previous_target} steps per day.")
         
         message_lines.append(f"Your target for next week is {new_target} steps per day.")
-        
-        # Add tip
         tip = get_random_tip('en', target_was_met)
         message_lines.append(f"\n{tip}")
     
-    message_body = "\n".join(message_lines)
-    return subject, message_body
-
+    return subject, "\n".join(message_lines)
+    
+    
 def send_goal_notification(participant, goal_data):
     """
     Send email notification to participant with their new weekly goal.
@@ -195,10 +198,10 @@ def send_goal_notification(participant, goal_data):
         subject, message_body = create_email_content(participant, goal_data)
         
         # Get email settings
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@example.com')
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'john.dowling@rimuhc.ca')
         recipient_email = participant.user.email
         
-        # Send email (or simulate sending if using console backend)
+        # Send email
         email_sent = False
         try:
             send_mail(
@@ -210,10 +213,22 @@ def send_goal_notification(participant, goal_data):
             )
             email_sent = True
             logger.info(f"Goal notification sent to {recipient_email} in {participant.language}")
+            
+            # SUCCESS - Clear any previous notification errors
+            participant.status_flags["send_notification_fail"] = False
+            participant.status_flags.pop("send_notification_last_error", None)
+            participant.status_flags.pop("send_notification_last_error_time", None)
+            
         except Exception as email_error:
-            logger.warning(f"Email sending failed, but logging message: {email_error}")
+            error_msg = f"Email sending failed: {str(email_error)}"
+            logger.warning(error_msg)
+            
+            # LOG ERROR to status_flags
+            participant.status_flags["send_notification_fail"] = True
+            participant.status_flags["send_notification_last_error"] = error_msg
+            participant.status_flags["send_notification_last_error_time"] = timezone.now().isoformat()
         
-        # Log message to participant's history
+        # Log message to participant's history (even if email failed)
         message_entry = {
             "date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
             "subject": subject,
@@ -231,11 +246,19 @@ def send_goal_notification(participant, goal_data):
         message_history = participant.message_history or []
         message_history.append(message_entry)
         participant.message_history = message_history
-        participant.save(update_fields=['message_history'])
+        participant.save(update_fields=['message_history', 'status_flags'])
         
         logger.info(f"Message logged for participant {participant.id}")
-        return email_sent  # Return the actual email status
+        return email_sent
         
     except Exception as e:
-        logger.error(f"Failed to send/log goal notification for {participant.user.email}: {e}")
+        error_msg = f"Failed to send/log goal notification: {str(e)}"
+        logger.error(error_msg)
+        
+        # LOG ERROR to status_flags
+        participant.status_flags["send_notification_fail"] = True
+        participant.status_flags["send_notification_last_error"] = error_msg
+        participant.status_flags["send_notification_last_error_time"] = timezone.now().isoformat()
+        participant.save(update_fields=['status_flags'])
+        
         return False

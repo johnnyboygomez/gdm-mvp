@@ -25,6 +25,14 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_HOST_USER = 'tractorpoetry@gmail.com'
+EMAIL_HOST_PASSWORD = 'dasw gfcj zlft icgi'
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER  # Or another sender address if you prefer
+
 
 DEFAULT_DEVICE_TYPE = 'fitbit'
 
@@ -125,13 +133,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
-
-USE_I18N = True
-
+TIME_ZONE = 'America/Toronto'
 USE_TZ = True
 
 USE_I18N = True
+
 LANGUAGES = [
     ('en', 'English'),
     ('fr', 'Français'),

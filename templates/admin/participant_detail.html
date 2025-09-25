@@ -172,6 +172,27 @@
             {% endif %}
           </div>
         {% endif %}
+        
+        {% if error_info.target_calculation_error %}
+  		 <div class="error-item">
+    		<div class="error-type">Target Calculation Error</div>
+    		<div class="error-message">{{ error_info.target_calculation_error.message }}</div>
+    		{% if error_info.target_calculation_error.timestamp %}
+      			<div class="error-timestamp">Last occurred: {{ error_info.target_calculation_error.timestamp }}</div>
+    		{% endif %}
+  		 </div>
+		{% endif %}
+		
+		{% if error_info.notification_error %}
+  			<div class="error-item">
+    			<div class="error-type">Notification Sending Error</div>
+    			<div class="error-message">{{ error_info.notification_error.message }}</div>
+    			{% if error_info.notification_error.timestamp %}
+      				<div class="error-timestamp">Last occurred: {{ error_info.notification_error.timestamp }}</div>
+    			{% endif %}
+  		</div>
+		{% endif %}
+				
       </div>
     {% else %}
       <div class="error-section no-errors">

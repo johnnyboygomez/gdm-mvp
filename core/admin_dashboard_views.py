@@ -6,34 +6,19 @@ from django.http import Http404
 from .models import Participant
 from collections import defaultdict
 import json
-
+    
 def get_next_target_day(start_date):
     today = date.today()
     delta_days = (today - start_date).days
     
     # Calculate which week they're in and when their next target day is
     weeks = delta_days // 7
-    return start_date + timedelta(days=7 * (weeks + 1))
     
-# core/admin_dashboard_views.py
-from datetime import date, timedelta, datetime
-from django.contrib.admin.views.decorators import staff_member_required
-from django.shortcuts import render
-from django.http import Http404
-from .models import Participant
-from collections import defaultdict
-import json
-
-def get_next_target_day(start_date):
-    today = date.today()
-    delta_days = (today - start_date).days
-    if delta_days < 7:
-        return None
-    weeks = delta_days // 7
-    next_target = start_date + timedelta(days=7 * (weeks + 1))
-    if delta_days % 7 == 0:
+    # If today is exactly a target day (multiple of 7), return today
+    if delta_days % 7 == 0 and delta_days >= 7:
         return today
-    return next_target
+    
+    return start_date + timedelta(days=7 * (weeks + 1))
 
 @staff_member_required
 def dashboard_view(request):
@@ -181,7 +166,9 @@ def dashboard_view(request):
                 # ADD THESE LINES:
                 'has_errors': (
                     participant.status_flags.get('fetch_fitbit_data_fail', False) or 
-                    participant.status_flags.get('refresh_fitbit_token_fail', False)
+                    participant.status_flags.get('refresh_fitbit_token_fail', False) or
+                    participant.status_flags.get('target_calculation_fail', False) or
+                    participant.status_flags.get('send_notification_fail', False) 
                 ),
             })
         
@@ -236,6 +223,22 @@ def participant_detail_view(request, participant_id):
             'message': participant.status_flags.get('refresh_fitbit_token_last_error', 'Unknown error'),
             'timestamp': participant.status_flags.get('refresh_fitbit_token_last_error_time')
         }
+    
+    # Check for target calculation errors
+    if participant.status_flags.get('target_calculation_fail'):
+        error_info['has_errors'] = True
+        error_info['target_calculation_error'] = {
+            'message': participant.status_flags.get('target_calculation_last_error', 'Unknown error'),
+            'timestamp': participant.status_flags.get('target_calculation_last_error_time')
+    }
+    
+    # Check for notification sending errors
+    if participant.status_flags.get('send_notification_fail'):
+        error_info['has_errors'] = True
+        error_info['notification_error'] = {
+            'message': participant.status_flags.get('send_notification_last_error', 'Unknown error'),
+            'timestamp': participant.status_flags.get('send_notification_last_error_time')
+    }
     
     context = {
         "participant": participant,

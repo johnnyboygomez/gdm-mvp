@@ -36,32 +36,14 @@ def refresh_fitbit_tokens(participant):
     # Send request to Fitbit
     resp = requests.post(token_url, headers=headers, data=data)
     if resp.status_code != 200:
-        error_msg = f"Failed to refresh Fitbit token: {resp.text}"
-        
-        # LOG ERROR TO status_flags
-        participant.status_flags["refresh_fitbit_token_fail"] = True
-        participant.status_flags["refresh_fitbit_token_last_error"] = error_msg
-        participant.status_flags["refresh_fitbit_token_last_error_time"] = timezone.now().isoformat()
-        participant.save(update_fields=["status_flags"])
-        
-        raise Exception(error_msg)
+        raise Exception(f"Failed to refresh Fitbit token: {resp.text}")
 
-    # SUCCESS - Clear any previous errors
-    participant.status_flags["refresh_fitbit_token_fail"] = False
-    participant.status_flags.pop("refresh_fitbit_token_last_error", None)
-    participant.status_flags.pop("refresh_fitbit_token_last_error_time", None)
-    
     # Save new tokens
     tokens = resp.json()
     participant.fitbit_access_token = tokens["access_token"]
     participant.fitbit_refresh_token = tokens["refresh_token"]
     participant.fitbit_token_expires = timezone.now() + timedelta(seconds=tokens["expires_in"])
-    participant.save(update_fields=[
-        "fitbit_access_token", 
-        "fitbit_refresh_token", 
-        "fitbit_token_expires",
-        "status_flags"
-    ])
+    participant.save(update_fields=["fitbit_access_token", "fitbit_refresh_token", "fitbit_token_expires"])
 
     return participant.fitbit_access_token
 
@@ -146,15 +128,7 @@ def fetch_fitbit_data_for_participant(participant_id):
     try: 
         participant = get_object_or_404(Participant, pk=participant_id)
         if not participant.fitbit_access_token:
-            error_msg = "No Fitbit access token found"
-            
-            # LOG ERROR TO status_flags
-            participant.status_flags["fetch_fitbit_data_fail"] = True
-            participant.status_flags["fetch_fitbit_data_last_error"] = error_msg
-            participant.status_flags["fetch_fitbit_data_last_error_time"] = timezone.now().isoformat()
-            participant.save(update_fields=["status_flags"])
-            
-            return {"error": error_msg}, 400
+            return {"error": "No Fitbit access token found"}, 400
         
         print(f"Found participant: {participant}")
 
@@ -168,16 +142,8 @@ def fetch_fitbit_data_for_participant(participant_id):
                 access_token = refresh_fitbit_tokens(participant)
                 print(f"New access token obtained: {access_token[:10]}... (truncated)")
             except Exception as e:
-                error_msg = f"Error refreshing token: {e}"
-                
-                # LOG ERROR TO status_flags
-                participant.status_flags["fetch_fitbit_data_fail"] = True
-                participant.status_flags["fetch_fitbit_data_last_error"] = error_msg
-                participant.status_flags["fetch_fitbit_data_last_error_time"] = timezone.now().isoformat()
-                participant.save(update_fields=["status_flags"])
-                
-                print(error_msg)
-                return {"error": error_msg}, 400
+                print(f"Error refreshing token: {e}")
+                return {"error": str(e)}, 400
 
         # Fetch from 1 week before start to today (or end of study period)
         start_fetch_date = participant.start_date - timedelta(days=7)
@@ -192,21 +158,8 @@ def fetch_fitbit_data_for_participant(participant_id):
 
         resp = requests.get(url, headers=headers)
         if resp.status_code != 200:
-            error_msg = f"Fitbit API returned error {resp.status_code}: {resp.text}"
-            
-            # LOG ERROR TO status_flags
-            participant.status_flags["fetch_fitbit_data_fail"] = True
-            participant.status_flags["fetch_fitbit_data_last_error"] = error_msg
-            participant.status_flags["fetch_fitbit_data_last_error_time"] = timezone.now().isoformat()
-            participant.save(update_fields=["status_flags"])
-            
-            print(error_msg)
+            print(f"Fitbit API returned error {resp.status_code}: {resp.text}")
             return {"error": resp.text}, resp.status_code
-
-        # SUCCESS - Clear any previous errors
-        participant.status_flags["fetch_fitbit_data_fail"] = False
-        participant.status_flags.pop("fetch_fitbit_data_last_error", None)
-        participant.status_flags.pop("fetch_fitbit_data_last_error_time", None)
 
         steps = resp.json().get("activities-steps", [])
         filtered_steps = [
@@ -218,34 +171,16 @@ def fetch_fitbit_data_for_participant(participant_id):
         print(f"Fetched {len(filtered_steps)} days of steps (non-zero only)")
 
         participant.daily_steps = filtered_steps
-        participant.save(update_fields=["daily_steps", "status_flags"])
+        participant.save(update_fields=["daily_steps"])
         print("Participant.daily_steps updated successfully.")
 
         return {"steps": filtered_steps}, 200
 
     except requests.RequestException as e:
-        error_msg = f"Fitbit API request failed: {e}"
-        logging.error(error_msg)
-        
-        participant = Participant.objects.filter(pk=participant_id).first()
-        if participant:
-            participant.status_flags["fetch_fitbit_data_fail"] = True
-            participant.status_flags["fetch_fitbit_data_last_error"] = error_msg
-            participant.status_flags["fetch_fitbit_data_last_error_time"] = timezone.now().isoformat()
-            participant.save(update_fields=["status_flags"])
-        
+        logging.error(f"Fitbit API request failed: {e}")
         return {"error": "Failed to fetch data from Fitbit"}, 500
     except Exception as e:
-        error_msg = f"Unexpected error: {e}"
-        logging.error(error_msg)
-        
-        participant = Participant.objects.filter(pk=participant_id).first()
-        if participant:
-            participant.status_flags["fetch_fitbit_data_fail"] = True
-            participant.status_flags["fetch_fitbit_data_last_error"] = error_msg
-            participant.status_flags["fetch_fitbit_data_last_error_time"] = timezone.now().isoformat()
-            participant.save(update_fields=["status_flags"])
-        
+        logging.error(f"Unexpected error: {e}")
         return {"error": "Internal server error"}, 500
 
 ###############

@@ -63,15 +63,7 @@
     }
   </style>
   <h1>Custom Admin Dashboard - Blocks by Day</h1>
-  <p>
-    {% if is_superuser %}
-      You are a <strong>Superuser</strong>.
-    {% elif is_manager %}
-      You are a <strong>Manager</strong>.
-    {% else %}
-      You are a staff member.
-    {% endif %}
-  </p>
+ 
   <hr>
   {% for group in grouped_participants_with_headers %}
     {% if group.participants %}
