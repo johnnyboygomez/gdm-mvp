@@ -20,6 +20,11 @@ def refresh_fitbit_tokens(participant):
     token_url = "https://api.fitbit.com/oauth2/token"
     client_id = settings.FITBIT_CLIENT_ID
     client_secret = settings.FITBIT_CLIENT_SECRET
+    
+        # DEBUG: Print these values
+    print(f"DEBUG - Client ID: {client_id[:10] if client_id else 'NONE'}...")
+    print(f"DEBUG - Client Secret: {client_secret[:10] if client_secret else 'NONE'}...")
+
 
     credentials = f"{client_id}:{client_secret}"
     basic_auth = base64.b64encode(credentials.encode()).decode()
@@ -210,10 +215,13 @@ def fetch_fitbit_data_for_participant(participant_id):
 
         steps = resp.json().get("activities-steps", [])
         filtered_steps = [
-            {"date": day["dateTime"], "value": day["value"]} 
-            for day in steps 
-            if int(day.get("value", 0)) > 0  # filter out zero values
-        ]
+    		{
+        		"date": day["dateTime"], 
+        		"value": int(day.get("value", 0))  # ← Store as int
+    		} 
+    		for day in steps 
+    		if int(day.get("value", 0)) > 0
+		]
 
         print(f"Fetched {len(filtered_steps)} days of steps (non-zero only)")
 
