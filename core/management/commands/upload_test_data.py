@@ -69,7 +69,7 @@ class Command(BaseCommand):
                         return
             else:
                 # Get all participants except the admin ones
-                participants = list(Participant.objects.exclude(id__in=[1, 47, 49]).all()[:len(rows)])
+                participants = list(Participant.objects.exclude(id__in=[1, 47, 49, 50, 51]).all()[:len(rows)])
 
             self.stdout.write(f"Will upload to {len(participants)} participants (excluding admin IDs 1, 47)")
 
