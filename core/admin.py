@@ -1,3 +1,4 @@
+# core/admin.py
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DefaultUserAdmin
 from django.utils.html import format_html, format_html_join
@@ -11,9 +12,9 @@ import json
 from .forms import CustomUserCreationForm, CustomUserChangeForm
 
 # In your admin.py
-admin.site.site_header = "Partner T2D Study"
-admin.site.site_title = "Partner T2D Study Portal"
-admin.site.index_title = "Welcome to Partner T2D Study Administration"
+admin.site.site_header = "PartnerStep"
+admin.site.site_title = "PartnerStep"
+admin.site.index_title = "Welcome to PartnerStep Administration"
 
 
 ###############

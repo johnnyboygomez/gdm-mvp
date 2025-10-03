@@ -42,7 +42,7 @@ class Participant(models.Model):
     
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     start_date = models.DateField()
-    daily_steps = models.JSONField(default=dict, blank=True)
+    daily_steps = models.JSONField(default=list, blank=True)
     targets = models.JSONField(default=dict, blank=True)
     
     language = models.CharField(

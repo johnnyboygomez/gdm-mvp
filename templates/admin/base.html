@@ -34,5 +34,52 @@
 #nav-sidebar .search {
     display: none !important;
 }
+
+/* Style for Quick Links section */
+.quick-links-section {
+    margin-top: 0px;
+}
+
+.quick-links-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.quick-links-section li {
+    margin: 0;
+}
+
+.quick-links-section a {
+    display: block;
+    padding: 10px 15px;
+    color: #417893;
+    text-decoration: none;
+}
+
+.quick-links-section a:hover {
+    background: var(--darkened-bg);
+}
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Find the nav sidebar
+    var sidebar = document.getElementById('nav-sidebar');
+    
+    if (sidebar) {
+        // Create the Quick Links section
+        var quickLinksDiv = document.createElement('div');
+        quickLinksDiv.className = 'quick-links-section';
+        quickLinksDiv.innerHTML = `
+            <ul>
+                <li><a href="{% url 'admin-dashboard' %}">Steps Monitor Dashboard</a></li>
+            </ul>
+        `;
+        
+        // Append it to the sidebar
+        sidebar.appendChild(quickLinksDiv);
+    }
+});
+</script>
 {% endblock %}
