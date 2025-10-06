@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 from datetime import date
 from core.models import Participant
 from goals.targets import run_weekly_algorithm, is_target_day
-from goals.notifications import send_goal_notification
+from goals.notifications import send_goal_notification, create_message_history_entry
 import logging
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,8 @@ class Command(BaseCommand):
         result = {
             'status': None,
             'notification_sent': False,
-            'notification_attempted': False
+            'notification_failed': False,
+            'error_details': None
         }
 
         try:
@@ -154,16 +155,49 @@ class Command(BaseCommand):
                 )
                 result['status'] = 'success'
 
-                # Send notification unless skipped
+                # Handle notification
                 if not skip_notifications:
-                    result['notification_attempted'] = True
-                    notification_sent = send_goal_notification(participant, goal_data)
-
-                    if notification_sent:
+                    notification_result = send_goal_notification(participant, goal_data)
+                    
+                    if notification_result['success']:
                         result['notification_sent'] = True
-                        self.stdout.write(f"  → Notification sent")
+                        self.stdout.write(f"  → Notification sent successfully")
+                        
+                        # Clear any previous notification errors
+                        participant.status_flags["send_notification_fail"] = False
+                        participant.status_flags.pop("send_notification_last_error", None)
+                        participant.status_flags.pop("send_notification_last_error_time", None)
+                        
                     else:
-                        self.stdout.write(self.style.WARNING(f"  → Notification failed (logged to status_flags)"))
+                        result['notification_failed'] = True
+                        result['error_details'] = notification_result['error_message']
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"  → Notification failed: {notification_result['error_message']}"
+                            )
+                        )
+                        
+                        # Log error to status_flags
+                        participant.status_flags["send_notification_fail"] = True
+                        participant.status_flags["send_notification_last_error"] = notification_result['error_message']
+                        participant.status_flags["send_notification_last_error_time"] = notification_result['timestamp']
+                    
+                    # Add to message history (regardless of email success)
+                    from goals.notifications import create_message_history_entry
+                    
+                    message_entry = create_message_history_entry(
+                        notification_result, 
+                        goal_data, 
+                        participant.language
+                    )
+                    message_history = participant.message_history or []
+                    message_history.append(message_entry)
+                    participant.message_history = message_history
+                    
+                    # Save participant with all updates
+                    participant.save(update_fields=['message_history', 'status_flags'])
+                    logger.info(f"Message logged and status updated for participant {participant.id}")
+                        
                 else:
                     self.stdout.write(f"  → Notification skipped")
 

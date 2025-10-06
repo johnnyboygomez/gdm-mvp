@@ -6,18 +6,18 @@ import json
 
 logger = logging.getLogger(__name__)
 
-def validate_step_data(average_steps):
+def validate_step_data(step_value):
     """Validate that step data is reasonable"""
-    if not isinstance(average_steps, (int, float)):
-        logger.warning(f"Invalid step data type: {type(average_steps)}")
+    if not isinstance(step_value, (int, float)):
+        logger.warning(f"Invalid step data type: {type(step_value)}")
         return False
     
-    if average_steps < 1000:
-        logger.warning(f"Step count too low (< 1000): {average_steps}")
+    if step_value < 1000:
+        logger.warning(f"Step count too low (< 1000): {step_value}")
         return False
         
-    if average_steps > 50000:  # Unreasonably high
-        logger.warning(f"Unusually high step count: {average_steps}")
+    if step_value > 100000:  # Unreasonably high
+        logger.warning(f"Unusually high step count: {step_value}")
         return False
         
     return True
@@ -176,23 +176,23 @@ def _calculate_target_missed_matrix(current_avg, previous_increase):
     # Fallback (shouldn't reach here with proper data)
     return "250", current_avg + 250
 
-def compute_weekly_target(participant, average_steps, week_start, week_end, last_goal_data=None):
+def compute_weekly_target(participant, step_value, week_start, week_end, last_goal_data=None):
     """
     Calculate this week's step target for a participant.
 
     Args:
         participant: Participant instance
-        average_steps: int, last week's average steps
+        step_value: int, last week's average steps
         week_start: Start date of the week (based on participant start date)
         week_end: End date of the week
         last_goal_data: Previous goal dictionary or None
     
     Returns:
-        dict: Goal data with increase, average_steps, new_target, previous_target
+        dict: Goal data with increase, step_value, new_target, previous_target
     """
     
     logger.info(f"Computing weekly target for participant {participant.id}, "
-               f"average_steps: {average_steps}, week: {week_start} to {week_end}, "
+               f"step_value: {step_value}, week: {week_start} to {week_end}, "
                f"has_last_goal: {last_goal_data is not None}")
     
     # Determine if previous target was met
@@ -201,11 +201,11 @@ def compute_weekly_target(participant, average_steps, week_start, week_end, last
     
     if last_goal_data:
         previous_target = last_goal_data.get("new_target", 0)
-        target_was_met = average_steps >= previous_target
+        target_was_met = step_value >= previous_target
     
     # Calculate new target
     increase_description, new_target = calculate_step_increase(
-        current_avg=average_steps,
+        current_avg=step_value,
         last_goal_data=last_goal_data,
         target_was_met=target_was_met
     )
@@ -213,7 +213,7 @@ def compute_weekly_target(participant, average_steps, week_start, week_end, last
     # Return goal data as dictionary - now includes previous_target
     goal_data = {
         "increase": increase_description,
-        "average_steps": average_steps,
+        "step_value": step_value,
         "new_target": new_target,
         "previous_target": previous_target,
         "week_start": week_start.strftime("%Y-%m-%d"),
@@ -245,7 +245,17 @@ def get_step_data_for_week(daily_steps, week_start, week_end):
             step_date = datetime.strptime(date_str, "%Y-%m-%d").date()
             step_value = int(step_entry["value"])
             
-            if week_start <= step_date <= week_end and validate_step_data(step_value):
+            # Get wear hours
+            wear_hours = step_entry.get("wear_hours", 0)
+            try:
+                wear_hours = float(wear_hours)
+            except (ValueError, TypeError):
+                wear_hours = 0
+            
+            # Validate: correct date range, reasonable step count, sufficient wear time
+            if week_start <= step_date <= week_end and \
+               validate_step_data(step_value) and \
+               wear_hours >= 10:
                 week_steps.append(step_value)
                 
         except (ValueError, KeyError, TypeError) as e:
@@ -253,7 +263,6 @@ def get_step_data_for_week(daily_steps, week_start, week_end):
             continue
     
     return week_steps
-
 def run_weekly_algorithm(participant):
     """
     Compute and save a weekly step goal for a participant.
@@ -327,13 +336,14 @@ def run_weekly_algorithm(participant):
         logger.info(f"Found {len(week_steps)} days of step data for analysis week")
 
         # Calculate goal based on available data
+        # Calculate goal based on available data
         if len(week_steps) >= 4:
             week_avg = sum(week_steps) // len(week_steps)
             logger.info(f"Calculated average: {week_avg} steps from {len(week_steps)} days")
             
             goal_data = compute_weekly_target(
                 participant=participant, 
-                average_steps=week_avg,
+                step_value=week_avg,
                 week_start=target_week_start,
                 week_end=target_week_end,
                 last_goal_data=last_goal_data
@@ -352,12 +362,16 @@ def run_weekly_algorithm(participant):
             participant.status_flags["target_calculation_fail"] = True
             participant.status_flags["target_calculation_last_error"] = error_msg
             participant.status_flags["target_calculation_last_error_time"] = timezone.now().isoformat()
+            participant.save(update_fields=["status_flags"])
+            
+            # Don't calculate or send notification when insufficient data
+            return None
             
             # Handle insufficient data
             if last_goal_data:
                 goal_data = {
                     "increase": "insufficient data - target maintained",
-                    "average_steps": "insufficient data",
+                    "step_value": "insufficient data",
                     "new_target": last_goal_data["new_target"],
                     "previous_target": last_goal_data.get("new_target"),
                     "week_start": target_week_start.strftime("%Y-%m-%d"),
@@ -375,7 +389,7 @@ def run_weekly_algorithm(participant):
         targets = participant.targets or {}
         targets[target_week_key] = {
             "increase": goal_data["increase"],
-            "average_steps": goal_data["average_steps"],
+            "step_value": goal_data["step_value"],
             "new_target": goal_data["new_target"],
             "previous_target": goal_data["previous_target"]
         }

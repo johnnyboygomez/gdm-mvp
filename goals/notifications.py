@@ -3,6 +3,7 @@ import random
 from django.core.mail import send_mail
 from django.conf import settings
 import logging
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -184,25 +185,36 @@ def create_email_content(participant, goal_data):
 def send_goal_notification(participant, goal_data):
     """
     Send email notification to participant with their new weekly goal.
-    
-    Args:
-        participant: Participant instance
-        goal_data: Dictionary containing goal information from run_weekly_algorithm
+    Returns detailed status - caller handles model updates.
     
     Returns:
-        bool: True if email sent successfully, False otherwise
+        dict: {
+            'success': bool,
+            'error_message': str or None,
+            'subject': str,
+            'body': str,
+            'timestamp': str (ISO format)
+        }
     """
     from django.utils import timezone
     
+    timestamp = timezone.now()
+    result = {
+        'success': False,
+        'error_message': None,
+        'subject': None,
+        'body': None,
+        'timestamp': timestamp.isoformat()
+    }
+    
     try:
         subject, message_body = create_email_content(participant, goal_data)
+        result['subject'] = subject
+        result['body'] = message_body
         
-        # Get email settings
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'john.dowling@rimuhc.ca')
         recipient_email = participant.user.email
         
-        # Send email
-        email_sent = False
         try:
             send_mail(
                 subject=subject,
@@ -211,54 +223,33 @@ def send_goal_notification(participant, goal_data):
                 recipient_list=[recipient_email],
                 fail_silently=False,
             )
-            email_sent = True
+            result['success'] = True
             logger.info(f"Goal notification sent to {recipient_email} in {participant.language}")
             
-            # SUCCESS - Clear any previous notification errors
-            participant.status_flags["send_notification_fail"] = False
-            participant.status_flags.pop("send_notification_last_error", None)
-            participant.status_flags.pop("send_notification_last_error_time", None)
-            
         except Exception as email_error:
-            error_msg = f"Email sending failed: {str(email_error)}"
-            logger.warning(error_msg)
-            
-            # LOG ERROR to status_flags
-            participant.status_flags["send_notification_fail"] = True
-            participant.status_flags["send_notification_last_error"] = error_msg
-            participant.status_flags["send_notification_last_error_time"] = timezone.now().isoformat()
+            result['error_message'] = f"SMTP error: {str(email_error)}"
+            logger.warning(f"Email sending failed for {recipient_email}: {result['error_message']}")
         
-        # Log message to participant's history (even if email failed)
-        message_entry = {
-            "date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "subject": subject,
-            "content": message_body,
-            "language": participant.language,
-            "goal_data": {
-                "average_steps": goal_data.get('average_steps'),
-                "new_target": goal_data.get('new_target'),
-                "target_was_met": goal_data.get('target_was_met')
-            },
-            "email_sent": email_sent
-        }
-        
-        # Add to message history
-        message_history = participant.message_history or []
-        message_history.append(message_entry)
-        participant.message_history = message_history
-        participant.save(update_fields=['message_history', 'status_flags'])
-        
-        logger.info(f"Message logged for participant {participant.id}")
-        return email_sent
+        return result
         
     except Exception as e:
-        error_msg = f"Failed to send/log goal notification: {str(e)}"
-        logger.error(error_msg)
-        
-        # LOG ERROR to status_flags
-        participant.status_flags["send_notification_fail"] = True
-        participant.status_flags["send_notification_last_error"] = error_msg
-        participant.status_flags["send_notification_last_error_time"] = timezone.now().isoformat()
-        participant.save(update_fields=['status_flags'])
-        
-        return False
+        result['error_message'] = f"Content creation error: {str(e)}"
+        logger.error(f"Failed to create notification for participant {participant.id}: {result['error_message']}")
+        return result
+
+
+def create_message_history_entry(notification_result, goal_data, participant_language):
+    """Create message history entry from notification result."""
+    return {
+        "date": notification_result['timestamp'],
+        "subject": notification_result['subject'],
+        "content": notification_result['body'],
+        "language": participant_language,
+        "goal_data": {
+            "average_steps": goal_data.get('average_steps'),
+            "new_target": goal_data.get('new_target'),
+            "target_was_met": goal_data.get('target_was_met')
+        },
+        "email_sent": notification_result['success'],
+        "error_message": notification_result.get('error_message')
+    }
