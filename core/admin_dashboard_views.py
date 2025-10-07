@@ -238,7 +238,7 @@ def participant_detail_view(request, participant_id):
         error_info['notification_error'] = {
             'message': participant.status_flags.get('send_notification_last_error', 'Unknown error'),
             'timestamp': participant.status_flags.get('send_notification_last_error_time')
-    }
+    	}
     
     context = {
         "participant": participant,
@@ -247,7 +247,7 @@ def participant_detail_view(request, participant_id):
         "user": request.user,
         "weekly_summaries": weekly_summaries,
         "error_info": error_info,  # ADD THIS LINE
-    }
+    	}
     
     return render(request, "admin/participant_detail.html", context)
     

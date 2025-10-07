@@ -61,7 +61,7 @@ class Participant(models.Model):
     )
     fitbit_user_id = models.CharField(
    		max_length=6,
-    	blank=False,
+    	blank=True,
     	null=False,
     	validators=[
         	RegexValidator(
