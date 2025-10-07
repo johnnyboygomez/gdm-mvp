@@ -1,12 +1,14 @@
-# test_data_generator.py
+# test_data_generator_49_rand.py Random 59
 """
 Simulates real-world syncing delays: 
-- Each user/dataset has a random (but contiguous) number of days with step data.
-- The possible number of days is [days_ago-2, days_ago-1, days_ago], always contiguous from the earliest day.
+- Generates 49 datasets: 7 each with starting days of 14, 13, 12, 11, 10, 9, 8 days ago
+- Each dataset has data from start_date through yesterday OR today (contiguous days)
+- Some datasets include partial data for today (20-500 steps) to simulate real-world syncing
+- In each week (7 datasets), 4-5 users are missing 2 or 4 days at the end (today + previous days)
 - Goals: week 1 if at least 7 days; week 2 only for 14 days.
-- UPDATED: Creates data in Fitbit format: [{"date": "2025-09-03", "value": 2941}, {"date": "2025-09-04", "value": 3008}]
-- NEW: Adds realistic fluctuation with occasional "off days" and "great days"
-- UPDATED: Now includes previous_target field in expected goals
+- Creates data in Fitbit format: [{"date": "2025-09-03", "value": 2941}, {"date": "2025-09-04", "value": 3008}]
+- Adds realistic fluctuation with occasional "off days" and "great days"
+- Includes previous_target field in expected goals
 """
 
 from datetime import date, timedelta
@@ -46,7 +48,6 @@ def generate_step_values(base_steps, variation=200, num_days=7):
             steps += active_boost
         
         # Weekend effect - people often have different patterns on weekends
-        # Assuming start_date is known, we can simulate this
         if day % 7 in [5, 6]:  # Approximate weekend days (Sat, Sun)
             weekend_factor = random.choice([-0.15, -0.1, 0.1, 0.2, 0.3])  # Can go either way
             weekend_change = int(steps * weekend_factor)
@@ -62,7 +63,6 @@ def create_step_data(start_date, step_values):
     """Create step data in Fitbit format: [{"date": "2025-09-03", "value": 2941}]"""
     return [
         {
-        #
             "date": (start_date + timedelta(days=day)).strftime("%Y-%m-%d"),
             "value": steps
         }
@@ -100,7 +100,8 @@ def predict_goal(average_steps, scenario="first_week", previous_target=None):
     
     return goal_data
 
-def generate_test_data(num_datasets=20, seed=42, days_ago=14):
+def generate_test_data(seed=42):
+    """Generate 49 datasets: 7 each for starting days 14, 13, 12, 11, 10, 9, 8 days ago"""
     random.seed(seed)
     activity_profiles = [
         {"name": "Sedentary", "base_range": (2000, 4000), "variation": (100, 300)},
@@ -111,45 +112,79 @@ def generate_test_data(num_datasets=20, seed=42, days_ago=14):
     ]
     all_test_results = {}
     yesterday = date.today() - timedelta(days=1)
-    start_date = yesterday - timedelta(days=days_ago - 1)
-
-    for i in range(num_datasets):
-        profile = random.choice(activity_profiles)
-        week1_base = random.randint(*profile["base_range"])
-        variation = random.randint(*profile["variation"])
-        # For each user, pick a random number of days in [days_ago-2, days_ago-1, days_ago]
-        min_days = max(7, days_ago - 2)  # never less than 7
-        max_days = days_ago
-        actual_days = random.randint(min_days, max_days)
-        step_values = generate_step_values(week1_base, variation, num_days=actual_days)
-        step_data = create_step_data(start_date, step_values)
-        test_name = f"Dataset_{i+1:02d}_{profile['name']}_{actual_days}days"
-
-        expected_goals = {}
-        previous_week_target = None  # Track previous target for chaining
+    today = date.today()
+    
+    # Define the starting days we want to test
+    starting_days_ago = [14, 13, 12, 11, 10, 9, 8]
+    dataset_counter = 1
+    
+    # Generate 7 datasets for each starting day
+    for days_ago in starting_days_ago:
+        start_date = yesterday - timedelta(days=days_ago - 1)
+        max_days = days_ago  # Maximum days from start_date to yesterday (inclusive)
         
-        # Always calculate week 1 target if at least 7 days of data
-        if actual_days >= 7:
-            week1 = step_values[:7]
-            week1_avg = calculate_average(week1)
-            goal_date_1 = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
-            week1_goal = predict_goal(week1_avg, "first_week", previous_target=None)
-            expected_goals[goal_date_1] = week1_goal
-            previous_week_target = week1_goal["new_target"]  # Store for next week
+        # For this week of 7 datasets, decide which 4-5 will be missing data
+        num_missing = random.choice([4, 5])
+        missing_indices = random.sample(range(7), num_missing)
+        
+        for i in range(7):  # 7 datasets per starting day
+            profile = random.choice(activity_profiles)
+            week1_base = random.randint(*profile["base_range"])
+            variation = random.randint(*profile["variation"])
             
-        # Only calculate week 2 target if there are 14 days
-        if actual_days == 14:
-            week2 = step_values[7:14]
-            week2_avg = calculate_average(week2)
-            goal_date_2 = (start_date + timedelta(days=14)).strftime("%Y-%m-%d")
-            week2_goal = predict_goal(week2_avg, "second_week", previous_target=previous_week_target)
-            expected_goals[goal_date_2] = week2_goal
+            # Determine if this dataset is missing days at the end
+            if i in missing_indices:
+                # Missing 2 or 4 days (including today if applicable)
+                days_missing = random.choice([2, 4])
+                actual_days = max_days - days_missing + 1  # +1 because we'll add partial today data
+            else:
+                # Full data through yesterday, plus partial today
+                actual_days = max_days + 1  # +1 to include today
+            
+            # Generate step values for all days except today
+            step_values = generate_step_values(week1_base, variation, num_days=actual_days - 1)
+            
+            # Add partial data for today (20-500 steps to simulate real-world syncing)
+            today_steps = random.randint(20, 500)
+            step_values.append(today_steps)
+            
+            step_data = create_step_data(start_date, step_values)
+            
+            # Calculate how many complete days (excluding today's partial data)
+            complete_days = actual_days - 1
+            test_name = f"Dataset_{dataset_counter:02d}_{profile['name']}_{complete_days}complete_plus_today"
 
-        all_test_results[test_name] = {
-            "step_data": step_data,
-            "expected_goals": expected_goals,
-            "actual_days": actual_days
-        }
+            expected_goals = {}
+            previous_week_target = None  # Track previous target for chaining
+            
+            # Only use complete days for goal calculations (exclude today's partial data)
+            complete_step_values = step_values[:-1]
+            
+            # Always calculate week 1 target if at least 7 complete days of data
+            if complete_days >= 7:
+                week1 = complete_step_values[:7]
+                week1_avg = calculate_average(week1)
+                goal_date_1 = (start_date + timedelta(days=7)).strftime("%Y-%m-%d")
+                week1_goal = predict_goal(week1_avg, "first_week", previous_target=None)
+                expected_goals[goal_date_1] = week1_goal
+                previous_week_target = week1_goal["new_target"]  # Store for next week
+                
+            # Only calculate week 2 target if there are 14 complete days
+            if complete_days >= 14:
+                week2 = complete_step_values[7:14]
+                week2_avg = calculate_average(week2)
+                goal_date_2 = (start_date + timedelta(days=14)).strftime("%Y-%m-%d")
+                week2_goal = predict_goal(week2_avg, "second_week", previous_target=previous_week_target)
+                expected_goals[goal_date_2] = week2_goal
+
+            all_test_results[test_name] = {
+                "step_data": step_data,
+                "expected_goals": expected_goals,
+                "actual_days": actual_days,
+                "complete_days": complete_days
+            }
+            dataset_counter += 1
+            
     return all_test_results
 
 def save_to_csv(all_test_results, filename="step_goals_test_data.csv"):
@@ -158,11 +193,12 @@ def save_to_csv(all_test_results, filename="step_goals_test_data.csv"):
         row = {
             "test_pair": test_name,
             "actual_days": results["actual_days"],
+            "complete_days": results["complete_days"],
             "data_json": json.dumps(results["step_data"]),
             "expected_goals_json": json.dumps(results["expected_goals"])
         }
         csv_data.append(row)
-    fieldnames = ["test_pair", "actual_days", "data_json", "expected_goals_json"]
+    fieldnames = ["test_pair", "actual_days", "complete_days", "data_json", "expected_goals_json"]
     file_exists = os.path.isfile(filename)
     with open(filename, "a", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -181,38 +217,27 @@ def get_user_input():
                 print("Please enter a number between 1 and 99")
         except ValueError:
             print("Please enter a valid number")
-    while True:
-        try:
-            datasets = int(input("Please enter number of datasets required (1 to 99): "))
-            if 1 <= datasets <= 99:
-                break
-            else:
-                print("Please enter a number between 1 and 99")
-        except ValueError:
-            print("Please enter a valid number")
-    while True:
-        try:
-            days_ago = int(input("How many days ago should the data start? (12, 13, or 14 days): "))
-            if 12 <= days_ago <= 14:
-                break
-            else:
-                print("Please enter number of days: 12, 13 or 14")
-        except ValueError:
-            print("Please enter a valid number")
-    return seed, datasets, days_ago
+    return seed
 
 def main():
     print("Step Data Generator (with realistic daily fluctuation)")
     print("====================================================")
-    seed, num_datasets, days_ago = get_user_input()
+    print("Will generate 49 datasets: 7 each for starting days 14, 13, 12, 11, 10, 9, 8 days ago")
+    print("All datasets include partial data for today (20-500 steps)")
+    print("In each week of 7, randomly 4-5 datasets are missing 2 or 4 days at the end")
+    seed = get_user_input()
     output_filename = f"step_goals_datasets.csv"
-    print(f"\nGenerating {num_datasets} datasets with seed {seed} and up to {days_ago} days of data each...")
-    print("Features: Off days, great days, weekend effects, natural variation, and previous_target tracking")
-    all_test_results = generate_test_data(num_datasets, seed, days_ago)
+    print(f"\nGenerating 49 datasets with seed {seed}...")
+    print("Features: Off days, great days, weekend effects, natural variation, partial today data, and previous_target tracking")
+    all_test_results = generate_test_data(seed)
     filename = save_to_csv(all_test_results, output_filename)
     print(f"\n✅ Complete!")
-    print(f"Generated {len(all_test_results)} datasets with {days_ago} possible days (each has 7 to {days_ago})")
-    print(f"Each expected goal now includes previous_target field")
+    print(f"Generated {len(all_test_results)} datasets")
+    print(f"Each dataset includes:")
+    print(f"  - Complete days: variable (based on missing data pattern)")
+    print(f"  - Today's partial data: 20-500 steps")
+    print(f"  - 4-5 users per week missing 2 or 4 days at the end")
+    print(f"Each expected goal includes previous_target field")
     print(f"Saved to: {filename}")
 
 if __name__ == "__main__":

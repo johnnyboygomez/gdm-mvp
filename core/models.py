@@ -3,6 +3,7 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.conf import settings
+from django.core.validators import MinLengthValidator, RegexValidator
 import uuid
 
 class CustomUserManager(BaseUserManager):
@@ -58,7 +59,19 @@ class Participant(models.Model):
         max_length=50,
         default=getattr(settings, 'DEFAULT_DEVICE_TYPE', 'fitbit')
     )
-    fitbit_user_id = models.CharField(max_length=100, blank=True, null=True)
+    fitbit_user_id = models.CharField(
+   		max_length=6,
+    	blank=False,
+    	null=False,
+    	validators=[
+        	RegexValidator(
+            	regex='^[A-Za-z0-9]{6}$',
+            	message='Fitbit User ID must be exactly 6 alphanumeric characters',
+        	)
+    	],
+    	help_text="Required: Participant's Fitbit User ID (6 characters, found in Fitbit app: You > Edit Profile)"
+	)
+
     fitbit_access_token = models.TextField(null=True, blank=True)
     fitbit_refresh_token = models.TextField(null=True, blank=True)
     fitbit_token_expires = models.DateTimeField(null=True, blank=True)

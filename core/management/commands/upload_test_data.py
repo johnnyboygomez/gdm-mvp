@@ -71,7 +71,7 @@ class Command(BaseCommand):
                 # Get all participants except the admin ones
                 participants = list(Participant.objects.exclude(id__in=[1, 47, 49, 50, 51]).all()[:len(rows)])
 
-            self.stdout.write(f"Will upload to {len(participants)} participants (excluding admin IDs 1, 47)")
+            self.stdout.write(f"Will upload to {len(participants)} participants (excluding admin IDs 1, 47, 48 ,49)")
 
             if dry_run:
                 self.stdout.write(self.style.WARNING("DRY RUN MODE"))
