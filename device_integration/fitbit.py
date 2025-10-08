@@ -124,7 +124,7 @@ def exchange_code_for_tokens(code, state):
     fitbit_user_id = profile_resp.json().get("user", {}).get("encodedId")
     
     # VALIDATE: Compare authenticated ID with pre-entered ID
-    if participant.fitbit_user_id and participant.fitbit_user_id != "temp" and participant.fitbit_user_id != fitbit_user_id:
+    if participant.fitbit_user_id and participant.fitbit_user_id != "tempid" and participant.fitbit_user_id != fitbit_user_id:
         return None, (
             f"Wrong Fitbit account! Expected Fitbit User ID: {participant.fitbit_user_id}, "
             f"but authenticated with ID: {fitbit_user_id}. "

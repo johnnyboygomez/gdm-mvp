@@ -353,7 +353,7 @@
       } else {
         // Daily view for 4-week view (28 days)
         for (let i = days - 1; i >= 0; i--) {
-          const date = new Date(today);
+          const date = new Date();
           date.setDate(date.getDate() - i);
           const dateString = date.toISOString().split('T')[0];
           chartLabels.push(dateString);
@@ -361,16 +361,13 @@
         }
       }
       
-      // Format labels based on view
+      // Format labels based on view - FIXED: Parse string directly to avoid timezone issues
       const formattedLabels = chartLabels.map(date => {
-        const d = new Date(date);
+        const [year, month, day] = date.split('-');
         if (dateFormat === 'MM/DD') {
-          return (d.getMonth() + 1).toString().padStart(2, '0') + '/' + 
-                 d.getDate().toString().padStart(2, '0');
+          return month + '/' + day;
         } else { // MM/DD/YY for weekly view
-          return (d.getMonth() + 1).toString().padStart(2, '0') + '/' + 
-                 d.getDate().toString().padStart(2, '0') + '/' + 
-                 d.getFullYear().toString().slice(-2);
+          return month + '/' + day + '/' + year.slice(-2);
         }
       });
       
@@ -439,7 +436,7 @@
               }
             },
             x: {
-              title: {
+            	title: {
                 display: true,
                 text: days === 365 ? 'Week Starting (MM/DD/YY)' : `Date (${dateFormat})`
               }
