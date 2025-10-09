@@ -215,6 +215,9 @@ def send_goal_notification(participant, goal_data):
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'john.dowling@rimuhc.ca')
         recipient_email = participant.user.email
         
+        # ✅ Get CC list from settings, or default to empty
+        cc_list = getattr(settings, 'GOAL_NOTIFICATION_CC', [])
+
         try:
             send_mail(
                 subject=subject,
@@ -223,6 +226,17 @@ def send_goal_notification(participant, goal_data):
                 recipient_list=[recipient_email],
                 fail_silently=False,
             )
+            
+            # ✅ Send a separate copy to CC addresses if any
+            if cc_list:
+                send_mail(
+                    subject=f"[CC] {subject}",
+                    message=message_body,
+                    from_email=from_email,
+                    recipient_list=cc_list,
+                    fail_silently=True,  # don’t break participant emails if CC fails
+                )
+
             result['success'] = True
             logger.info(f"Goal notification sent to {recipient_email} in {participant.language}")
             

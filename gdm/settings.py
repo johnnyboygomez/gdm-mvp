@@ -34,6 +34,9 @@ EMAIL_HOST_PASSWORD = 'dasw gfcj zlft icgi'
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER  # Or another sender address if you prefer
 
+GOAL_NOTIFICATION_CC = [
+    "john.dowling@rimuhc.ca",
+]
 
 DEFAULT_DEVICE_TYPE = 'fitbit'
 

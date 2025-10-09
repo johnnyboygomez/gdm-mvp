@@ -6,6 +6,27 @@ import json
 
 logger = logging.getLogger(__name__)
 
+def _log_status_flag(participant, key, error_message=None):
+    """
+    Helper to set or clear status flags. 
+    Duplicated from device_integration/fitbit.py to avoid circular imports.
+    """
+    # Get a mutable copy of status_flags to ensure Django detects the change
+    flags = participant.status_flags.copy() if participant.status_flags else {}
+    
+    if error_message:
+        flags[key] = True
+        flags[f"{key}_last_error"] = error_message
+        flags[f"{key}_last_error_time"] = timezone.now().isoformat()
+    else:
+        flags[key] = False
+        flags.pop(f"{key}_last_error", None)
+        flags.pop(f"{key}_last_error_time", None)
+    
+    # Reassign to trigger JSONField update detection
+    participant.status_flags = flags
+    participant.save(update_fields=["status_flags"])
+
 def validate_step_data(step_value):
     """Validate that step data is reasonable"""
     if not isinstance(step_value, (int, float)):
@@ -176,23 +197,23 @@ def _calculate_target_missed_matrix(current_avg, previous_increase):
     # Fallback (shouldn't reach here with proper data)
     return "250", current_avg + 250
 
-def compute_weekly_target(participant, step_value, week_start, week_end, last_goal_data=None):
+def compute_weekly_target(participant, weekly_average, week_start, week_end, last_goal_data=None):
     """
     Calculate this week's step target for a participant.
 
     Args:
         participant: Participant instance
-        step_value: int, last week's average steps
+        weekly_average: int, last week's average steps
         week_start: Start date of the week (based on participant start date)
         week_end: End date of the week
         last_goal_data: Previous goal dictionary or None
     
     Returns:
-        dict: Goal data with increase, step_value, new_target, previous_target
+        dict: Goal data with increase, average_steps, new_target
     """
     
     logger.info(f"Computing weekly target for participant {participant.id}, "
-               f"step_value: {step_value}, week: {week_start} to {week_end}, "
+               f"weekly_average: {weekly_average}, week: {week_start} to {week_end}, "
                f"has_last_goal: {last_goal_data is not None}")
     
     # Determine if previous target was met
@@ -201,23 +222,23 @@ def compute_weekly_target(participant, step_value, week_start, week_end, last_go
     
     if last_goal_data:
         previous_target = last_goal_data.get("new_target", 0)
-        target_was_met = step_value >= previous_target
+        target_was_met = weekly_average >= previous_target
     
     # Calculate new target
     increase_description, new_target = calculate_step_increase(
-        current_avg=step_value,
+        current_avg=weekly_average,
         last_goal_data=last_goal_data,
         target_was_met=target_was_met
     )
     
-    # Return goal data as dictionary - now includes previous_target
+    # Return goal data as dictionary - USES ORIGINAL FIELD NAMES
     goal_data = {
         "increase": increase_description,
-        "step_value": step_value,
+        "average_steps": weekly_average,  # RESTORED: was "step_value"
         "new_target": new_target,
-        "previous_target": previous_target,
         "week_start": week_start.strftime("%Y-%m-%d"),
         "week_end": week_end.strftime("%Y-%m-%d"),
+        "previous_target": previous_target,
         "target_was_met": target_was_met if last_goal_data else None
     }
     
@@ -245,17 +266,8 @@ def get_step_data_for_week(daily_steps, week_start, week_end):
             step_date = datetime.strptime(date_str, "%Y-%m-%d").date()
             step_value = int(step_entry["value"])
             
-            # Get wear hours
-            wear_hours = step_entry.get("wear_hours", 0)
-            try:
-                wear_hours = float(wear_hours)
-            except (ValueError, TypeError):
-                wear_hours = 0
-            
-            # Validate: correct date range, reasonable step count, sufficient wear time
-            if week_start <= step_date <= week_end and \
-               validate_step_data(step_value) and \
-               wear_hours >= 10:
+            # Validate: correct date range and reasonable step count
+            if week_start <= step_date <= week_end and validate_step_data(step_value):
                 week_steps.append(step_value)
                 
         except (ValueError, KeyError, TypeError) as e:
@@ -263,6 +275,7 @@ def get_step_data_for_week(daily_steps, week_start, week_end):
             continue
     
     return week_steps
+
 def run_weekly_algorithm(participant):
     """
     Compute and save a weekly step goal for a participant.
@@ -322,10 +335,7 @@ def run_weekly_algorithm(participant):
                     # TRACK ERROR: Missing previous goal when expected
                     error_msg = f"Missing previous goal data for week {previous_week_key}"
                     logger.warning(error_msg)
-                    participant.status_flags["target_calculation_fail"] = True
-                    participant.status_flags["target_calculation_last_error"] = error_msg
-                    participant.status_flags["target_calculation_last_error_time"] = timezone.now().isoformat()
-                    participant.save(update_fields=["status_flags"])
+                    _log_status_flag(participant, "target_calculation_fail", error_msg)
             
             logger.info(f"Using previous goal data: {last_goal_data}")
         else:
@@ -336,62 +346,38 @@ def run_weekly_algorithm(participant):
         logger.info(f"Found {len(week_steps)} days of step data for analysis week")
 
         # Calculate goal based on available data
-        # Calculate goal based on available data
         if len(week_steps) >= 4:
             week_avg = sum(week_steps) // len(week_steps)
             logger.info(f"Calculated average: {week_avg} steps from {len(week_steps)} days")
             
             goal_data = compute_weekly_target(
                 participant=participant, 
-                step_value=week_avg,
+                weekly_average=week_avg,
                 week_start=target_week_start,
                 week_end=target_week_end,
                 last_goal_data=last_goal_data
             )
             
             # SUCCESS - Clear any previous errors
-            participant.status_flags["target_calculation_fail"] = False
-            participant.status_flags.pop("target_calculation_last_error", None)
-            participant.status_flags.pop("target_calculation_last_error_time", None)
+            _log_status_flag(participant, "target_calculation_fail")
             
         else:
             # TRACK ERROR: Insufficient data
             error_msg = f"Insufficient step data: only {len(week_steps)} days available (need 4+)"
             logger.warning(error_msg)
             
-            participant.status_flags["target_calculation_fail"] = True
-            participant.status_flags["target_calculation_last_error"] = error_msg
-            participant.status_flags["target_calculation_last_error_time"] = timezone.now().isoformat()
-            participant.save(update_fields=["status_flags"])
+            _log_status_flag(participant, "target_calculation_fail", error_msg)
             
             # Don't calculate or send notification when insufficient data
             return None
-            
-            # Handle insufficient data
-            if last_goal_data:
-                goal_data = {
-                    "increase": "insufficient data - target maintained",
-                    "step_value": "insufficient data",
-                    "new_target": last_goal_data["new_target"],
-                    "previous_target": last_goal_data.get("new_target"),
-                    "week_start": target_week_start.strftime("%Y-%m-%d"),
-                    "week_end": target_week_end.strftime("%Y-%m-%d"),
-                    "target_was_met": None
-                }
-                logger.info("Insufficient step data - maintaining previous target")
-            else:
-                logger.error(f"First week with insufficient data for participant {participant.id}")
-                participant.save(update_fields=["status_flags"])
-                return None
 
-        # Save the goal to participant.targets
+        # Save the goal to participant.targets - USES ORIGINAL FIELD NAMES
         target_week_key = target_week_start.strftime("%Y-%m-%d")
         targets = participant.targets or {}
         targets[target_week_key] = {
             "increase": goal_data["increase"],
-            "step_value": goal_data["step_value"],
-            "new_target": goal_data["new_target"],
-            "previous_target": goal_data["previous_target"]
+            "average_steps": goal_data["average_steps"],  # RESTORED: consistent with old data
+            "new_target": goal_data["new_target"]
         }
         
         participant.targets = targets
@@ -405,9 +391,6 @@ def run_weekly_algorithm(participant):
         error_msg = f"Unexpected error during target calculation: {str(e)}"
         logger.error(error_msg, exc_info=True)
         
-        participant.status_flags["target_calculation_fail"] = True
-        participant.status_flags["target_calculation_last_error"] = error_msg
-        participant.status_flags["target_calculation_last_error_time"] = timezone.now().isoformat()
-        participant.save(update_fields=["status_flags"])
+        _log_status_flag(participant, "target_calculation_fail", error_msg)
         
         raise  # Re-raise to let caller handle

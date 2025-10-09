@@ -3,7 +3,6 @@
 import requests
 import logging
 import base64
-import time
 from datetime import datetime, timedelta
 from django.conf import settings
 from django.utils import timezone
@@ -14,7 +13,7 @@ from core.models import Participant
 # Helpers
 def _log_status_flag(participant, key, error_message=None):
     """Helper to set or clear status flags for Fitbit operations."""
-    # FIXED: Get a mutable copy of status_flags to ensure Django detects the change
+    # Get a mutable copy of status_flags to ensure Django detects the change
     flags = participant.status_flags.copy() if participant.status_flags else {}
     
     if error_message:
@@ -26,7 +25,7 @@ def _log_status_flag(participant, key, error_message=None):
         flags.pop(f"{key}_last_error", None)
         flags.pop(f"{key}_last_error_time", None)
     
-    # FIXED: Reassign to trigger JSONField update detection
+    # Reassign to trigger JSONField update detection
     participant.status_flags = flags
     participant.save(update_fields=["status_flags"])
 
@@ -137,7 +136,7 @@ def exchange_code_for_tokens(code, state):
     if expires_in:
         participant.fitbit_token_expires = timezone.now() + timedelta(seconds=expires_in)
     
-    # ADDED: Clear all Fitbit-related error flags on successful authentication
+    # Clear all Fitbit-related error flags on successful authentication
     _log_status_flag(participant, "refresh_fitbit_token_fail")
     _log_status_flag(participant, "fetch_fitbit_data_fail")
     
@@ -165,7 +164,7 @@ def fetch_fitbit_data_for_participant(participant_id, force_refetch=False):
 
         end_fetch_date = min(timezone.now().date(), participant.start_date + timedelta(days=365))
         
-        # FIXED: Clear error flag as soon as we confirm valid token and before any early returns
+        # Clear error flag as soon as we confirm valid token and before any early returns
         # This ensures that if participant was previously in error state, it gets cleared
         # even if no actual fetch is needed (already up to date case)
         _log_status_flag(participant, "fetch_fitbit_data_fail")
@@ -198,9 +197,6 @@ def fetch_fitbit_data_for_participant(participant_id, force_refetch=False):
         participant.save(update_fields=["daily_steps", "status_flags"])
         print(f"Fetched and merged {len(merged_steps)} days of step data.")
 
-        # Estimate wear hours (no circular import - function is in same file)
-        estimate_wear_hours(participant.id)
-
         return {"steps": merged_steps}, 200
 
     except requests.RequestException as e:
@@ -214,121 +210,6 @@ def fetch_fitbit_data_for_participant(participant_id, force_refetch=False):
         _log_status_flag(participant, "fetch_fitbit_data_fail", error_msg)
         return {"error": "Internal server error"}, 500
 
-###############
-# Estimate wear hours
-def estimate_wear_hours(participant_id, force_refetch=False):
-    """
-    Estimate Fitbit wear hours per day using heart rate zones.
-    
-    REQUIREMENTS:
-    - Participant's Fitbit age must be set to 95-99 for this to work
-    - With age 95-99, max HR ~120-125 bpm
-    - Normal resting HR (60-80 bpm) falls into Fat Burn zone
-    - Device not worn = all time in Out of Range zone
-    
-    METHOD:
-    - Fetches heart rate zone data from Fitbit
-    - Sums minutes in Fat Burn + Cardio + Peak zones
-    - Ignores "Out of Range" zone completely
-    - Result = estimated device wear time in hours
-    
-    Incremental: only fetches days not yet processed.
-    """
-    participant = get_object_or_404(Participant, pk=participant_id)
-
-    if not participant.fitbit_access_token:
-        return {"error": "No Fitbit access token"}, 400
-
-    daily_steps = participant.daily_steps or []
-    steps_dict = {day["date"]: day for day in daily_steps}
-    
-    # Find dates that already have wear_hours
-    dates_with_wear_hours = {day["date"] for day in daily_steps if "wear_hours" in day}
-
-    # Determine date range to fetch
-    if force_refetch:
-        start_fetch_date = participant.start_date
-        print("Force refetch: fetching all wear time data from study start")
-    elif dates_with_wear_hours:
-        last_date = max(dates_with_wear_hours)
-        start_fetch_date = datetime.strptime(last_date, "%Y-%m-%d").date()
-        print(f"Incremental fetch: starting from {start_fetch_date} (last date with wear_hours, inclusive)")
-    else:
-        start_fetch_date = participant.start_date
-        print("No existing wear time data: fetching from study start")
-
-    end_fetch_date = min(timezone.now().date(), participant.start_date + timedelta(days=365))
-    if start_fetch_date > end_fetch_date:
-        return {"daily_steps": daily_steps, "message": "Already up to date"}, 200
-
-    access_token = participant.fitbit_access_token
-    current_date = start_fetch_date
-    estimated_wear_hours = {}
-
-    while current_date <= end_fetch_date:
-        date_str = current_date.strftime("%Y-%m-%d")
-        url = f"https://api.fitbit.com/1/user/-/activities/heart/date/{date_str}/1d.json"
-        headers = {"Authorization": f"Bearer {access_token}"}
-
-        wear_hours = 0
-        try:
-            resp = requests.get(url, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            heart_data = data.get("activities-heart", [])
-            
-            if heart_data:
-                hr_zones = heart_data[0].get("value", {}).get("heartRateZones", [])
-                
-                # Sum ONLY Fat Burn + Cardio + Peak (ignore "Out of Range")
-                wear_minutes = 0
-                
-                for zone in hr_zones:
-                    zone_name = zone.get("name", "")
-                    zone_minutes = zone.get("minutes", 0)
-                    
-                    # Exclude "Out of Range" zone
-                    if zone_name != "Out of Range":
-                        wear_minutes += zone_minutes
-                
-                wear_hours = round(wear_minutes / 60, 1)
-                
-                # Cap at 24 hours
-                wear_hours = min(24.0, wear_hours)
-                
-                print(f"  {date_str}: {wear_hours} hours ({wear_minutes} minutes)")
-            else:
-                print(f"  {date_str}: No heart rate data")
-                
-        except requests.RequestException as e:
-            error_msg = f"Fitbit heart rate fetch failed for {date_str}: {e}"
-            logging.error(error_msg)
-            _log_status_flag(participant, "estimate_wear_hours_fail", error_msg)
-            current_date += timedelta(days=1)
-            continue
-
-        # Store estimate
-        estimated_wear_hours[date_str] = wear_hours
-        
-        # Rate limiting
-        time.sleep(1)
-        current_date += timedelta(days=1)
-
-    # Merge estimates ONLY into dates that already have step data
-    for date_str, hours in estimated_wear_hours.items():
-        if date_str in steps_dict:
-            steps_dict[date_str]["wear_hours"] = hours
-
-    merged_daily_steps = sorted(steps_dict.values(), key=lambda x: x["date"])
-    participant.daily_steps = merged_daily_steps
-
-    # SUCCESS - clear any previous errors
-    _log_status_flag(participant, "estimate_wear_hours_fail")
-    participant.save(update_fields=["daily_steps", "status_flags"])
-
-    print(f"\nTotal: {len(estimated_wear_hours)} days processed")
-    return {"daily_steps": merged_daily_steps}, 200
-    
 ###############
 # Add device account
 def add_device_account_for_participant(participant, device_type):
