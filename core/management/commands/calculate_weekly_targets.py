@@ -1,8 +1,9 @@
 # core/management/commands/calculate_weekly_targets.py
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 from datetime import date
 from core.models import Participant
-from goals.targets import run_weekly_algorithm, is_target_day
+from goals.targets import run_weekly_algorithm, is_target_day, _log_status_flag
 from goals.notifications import send_goal_notification, create_message_history_entry
 import logging
 
@@ -13,7 +14,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--participant_id',
+            '--participant-id',
             type=int,
             help='Calculate target for specific participant ID only',
         )
@@ -69,7 +70,7 @@ class Command(BaseCommand):
                 success_count += 1
                 if result.get('notification_sent'):
                     notification_sent_count += 1
-                elif result.get('notification_attempted'):
+                elif result.get('notification_failed'):
                     notification_failed_count += 1
             elif result['status'] == 'no_target':
                 no_target_count += 1
@@ -132,7 +133,7 @@ class Command(BaseCommand):
 
             has_today_data = any(
                 entry.get('date') == today_str and safe_int(entry.get('value')) > 0
-                for entry in participant.daily_steps
+                for entry in daily_steps
             )
 
             if not has_today_data:
@@ -163,10 +164,8 @@ class Command(BaseCommand):
                         result['notification_sent'] = True
                         self.stdout.write(f"  → Notification sent successfully")
                         
-                        # Clear any previous notification errors
-                        participant.status_flags["send_notification_fail"] = False
-                        participant.status_flags.pop("send_notification_last_error", None)
-                        participant.status_flags.pop("send_notification_last_error_time", None)
+                        # FIXED: Clear notification errors using helper function
+                        _log_status_flag(participant, "send_notification_fail")
                         
                     else:
                         result['notification_failed'] = True
@@ -177,26 +176,28 @@ class Command(BaseCommand):
                             )
                         )
                         
-                        # Log error to status_flags
-                        participant.status_flags["send_notification_fail"] = True
-                        participant.status_flags["send_notification_last_error"] = notification_result['error_message']
-                        participant.status_flags["send_notification_last_error_time"] = notification_result['timestamp']
+                        # FIXED: Log error using helper function
+                        _log_status_flag(
+                            participant,
+                            "send_notification_fail",
+                            notification_result['error_message']
+                        )
                     
                     # Add to message history (regardless of email success)
-                    from goals.notifications import create_message_history_entry
-                    
                     message_entry = create_message_history_entry(
                         notification_result, 
                         goal_data, 
                         participant.language
                     )
-                    message_history = participant.message_history or []
+                    
+                    # FIXED: Use copy/reassign pattern for JSONField
+                    message_history = (participant.message_history or []).copy()
                     message_history.append(message_entry)
                     participant.message_history = message_history
                     
-                    # Save participant with all updates
-                    participant.save(update_fields=['message_history', 'status_flags'])
-                    logger.info(f"Message logged and status updated for participant {participant.id}")
+                    # Save participant with message history (status_flags already saved by _log_status_flag)
+                    participant.save(update_fields=['message_history'])
+                    logger.info(f"Message logged for participant {participant.id}")
                         
                 else:
                     self.stdout.write(f"  → Notification skipped")
