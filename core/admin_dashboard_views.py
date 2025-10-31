@@ -99,6 +99,9 @@ def dashboard_view(request):
             block_date = today + timedelta(days=days)
             header_days[days] = [block_date - timedelta(days=delta) for delta in range(7, 0, -1)]
         
+        # Calculate block_date for this group
+        block_date = participants[0]['next_target_day'] if participants else today + timedelta(days=days)
+        
         # Process participants to include step data for each day
         processed_participants = []
         for p in participants:
@@ -153,8 +156,31 @@ def dashboard_view(request):
                     'class': cell_classes[i]
                 })
             
+            # Get target day step count
+            target_day_str = p['next_target_day'].strftime('%Y-%m-%d')
+            target_day_steps = p['daily_steps'].get(target_day_str, '-')
+            
+            # Determine target day cell class
+            if target_day_steps != '-':
+                target_day_class = 'has-data'
+            elif p['next_target_day'] > today:
+                target_day_class = 'no-data-future'
+            elif days <= 1:
+                if data_count < 4:
+                    target_day_class = 'no-data-critical'
+                else:
+                    target_day_class = 'no-data-warning'
+            elif days <= 3:
+                if data_count < 3:
+                    target_day_class = 'no-data-alert'
+                else:
+                    target_day_class = 'no-data-caution'
+            else:
+                target_day_class = 'no-data-caution'
+            
             print(f"DEBUG: Final steps_for_days: {steps_for_days}")
             print(f"DEBUG: Cell classes: {cell_classes}")
+            print(f"DEBUG: Target day ({target_day_str}): steps={target_day_steps}, class={target_day_class}")
             
             # MODIFIED: Add error checking using the participant object
             processed_participants.append({
@@ -163,6 +189,8 @@ def dashboard_view(request):
                 'participant_id': p['participant_id'],
                 'steps_with_classes': steps_with_classes,
                 'data_count': data_count,
+                'target_day_steps': target_day_steps,
+                'target_day_class': target_day_class,
                 # ADD THESE LINES:
                 'has_errors': (
                     participant.status_flags.get('fetch_fitbit_data_fail', False) or 
@@ -175,7 +203,8 @@ def dashboard_view(request):
         grouped_participants_with_headers.append({
             'days': days,
             'participants': processed_participants,
-            'header_days': header_days[days]
+            'header_days': header_days[days],
+            'block_date': block_date  # ADD THIS LINE
         })
     
     context = {

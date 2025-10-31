@@ -103,6 +103,8 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
         'fetch_fitbit_data_button',
         'calculate_weekly_goals_button',
         'send_notification_button',
+    	'fitbit_access_token',         
+    	'fitbit_refresh_token',
         'fitbit_token_expires',
         'fitbit_auth_token',
         'device_type',

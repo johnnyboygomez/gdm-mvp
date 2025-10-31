@@ -36,11 +36,21 @@
     .dashboard-table {
       border-collapse: collapse;
       width: 100%;
+      table-layout: fixed; 
     }
     .dashboard-table th {
       background-color: #f0f0f0;
       padding: 8px;
       text-align: center;
+    }
+    .dashboard-table th:first-child,
+    .dashboard-table td:first-child {
+      width: 320px; /* ~44 characters at typical font size */
+      text-align: left;
+      padding-left: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .error-cell {
       text-align: center;
@@ -67,7 +77,7 @@
   <hr>
   {% for group in grouped_participants_with_headers %}
     {% if group.participants %}
-      {% with block_date=group.participants.0.next_target_day days=group.days %}
+      {% with block_date=group.block_date days=group.days %}
         <div class="dashboard-block" style="margin-bottom:2em;">
           <h2>
             {% if days == 0 %}Today ({{ today|date:"Y-m-d" }})
@@ -84,7 +94,7 @@
                 {% for day in group.header_days %}
                   <th>{{ day|date:"D" }}<br><small>{{ day|date:"m/d" }}</small></th>
                 {% endfor %}
-                <th>Target Date</th>
+                <th>Target Day<br><small>{{ block_date|date:"m/d" }}</small></th>
               </tr>
             </thead>
             <tbody>
@@ -110,7 +120,9 @@
                       {{ cell.steps }}
                     </td>
                   {% endfor %}
-                  <td>{{ p.next_target_day|date:"Y-m-d" }}</td>
+                  <td class="step-cell {{ p.target_day_class }}">
+  						{{ p.target_day_steps }}
+					</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -118,7 +130,7 @@
         </div>
       {% endwith %}
     {% else %}
-      {% with block_date=today days=group.days %}
+      {% with block_date=group.block_date days=group.days %}
         <div class="dashboard-block" style="margin-bottom:2em;">
           <h2>
             {% if days == 0 %}Today ({{ today|date:"Y-m-d" }})
@@ -135,7 +147,7 @@
                 {% for day in group.header_days %}
                   <th>{{ day|date:"D" }}<br><small>{{ day|date:"m/d" }}</small></th>
                 {% endfor %}
-                <th>Target Date</th>
+                <th>Target Day<br><small>{{ block_date|date:"m/d" }}</small></th>
               </tr>
             </thead>
             <tbody>
@@ -145,7 +157,7 @@
                 {% for day in group.header_days %}
                   <td class="step-cell no-data-future">-</td>
                 {% endfor %}
-                <td>-</td>
+                <td class="step-cell no-data-future">-</td>
               </tr>
             </tbody>
           </table>
