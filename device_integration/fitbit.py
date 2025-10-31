@@ -140,7 +140,14 @@ def exchange_code_for_tokens(code, state):
     _log_status_flag(participant, "refresh_fitbit_token_fail")
     _log_status_flag(participant, "fetch_fitbit_data_fail")
     
-    participant.save()
+    # Explicitly save the fields we modified
+    participant.save(update_fields=[
+        "fitbit_access_token", 
+        "fitbit_refresh_token", 
+        "fitbit_user_id", 
+        "fitbit_token_expires"
+    ])
+    
     return participant, None
 
 ###############

@@ -1,13 +1,13 @@
 {% extends "admin/base.html" %}
 
-{% block title %}My Awesome Site Admin{% endblock %}
+{% block title %}PartnerStep Admin{% endblock %}
 
-{% block site_title %}My Awesome Site Admin{% endblock %}
+{% block site_title %}PartnerStep Site Admin{% endblock %}
 
-{% block site_header %}My Awesome Site Admin{% endblock %}
+{% block site_header %}PartnerStep Site Admin{% endblock %}
 
 {% block branding %}
-<h1 id="site-name"><a href="{% url 'admin:index' %}">My Awesome Site Admin</a></h1>
+<h1 id="site-name"><a href="{% url 'admin:index' %}">PartnerStep Admin</a></h1>
 {% endblock %}
 
 {% block nav-global %}{% endblock %}
@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', function() {
         quickLinksDiv.innerHTML = `
             <ul>
                 <li><a href="{% url 'admin-dashboard' %}">Steps Monitor Dashboard</a></li>
+                <li><a href="{% url 'admin:core_customuser_changelist' %}">View Users/Participants</a></li>
             </ul>
         `;
         

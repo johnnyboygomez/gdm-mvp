@@ -214,6 +214,7 @@ def dashboard_view(request):
         "today": today,
         "user": request.user,
     }
+    
     return render(request, "admin/dashboard.html", context)
     
 @staff_member_required
