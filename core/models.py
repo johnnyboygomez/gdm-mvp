@@ -45,6 +45,7 @@ class Participant(models.Model):
     start_date = models.DateField()
     daily_steps = models.JSONField(default=list, blank=True)
     targets = models.JSONField(default=dict, blank=True)
+    device_sync_status = models.JSONField(default=dict, blank=True)
     
     language = models.CharField(
         max_length=2, 

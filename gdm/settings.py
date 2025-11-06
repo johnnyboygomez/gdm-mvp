@@ -23,6 +23,9 @@ import dj_database_url
 
 import os
 
+ADMIN_NOTIFICATION_EMAIL = 'john.dowling@rimuhc.ca'
+BASE_URL = 'https://gdm-mvp.onrender.com/admin'  # For links in admin emails
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 

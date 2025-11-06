@@ -146,6 +146,88 @@
     </div>
   </div>
 
+  <!-- Device Sync Warning Section -->
+  <div class="content-section">
+    {% if participant.device_sync_status.warning_started_date %}
+      <div class="error-section">
+        <h2 style="color: #721c24; margin-top: 0;">⚠️ Device Sync Warning Active</h2>
+        
+        <div class="info-grid" style="margin-bottom: 15px;">
+          <div class="info-label">Warning Started:</div>
+          <div>{{ participant.device_sync_status.warning_started_date }}</div>
+          
+          <div class="info-label">Consecutive Missing Days:</div>
+          <div><strong>{{ participant.device_sync_status.consecutive_missing_days }}</strong></div>
+          
+          <div class="info-label">Last Check:</div>
+          <div>{{ participant.device_sync_status.last_check_date }}</div>
+          
+          {% if participant.device_sync_status.participant_notified_date %}
+          <div class="info-label">Participant Notified:</div>
+          <div>{{ participant.device_sync_status.participant_notified_date }}</div>
+          {% endif %}
+          
+          {% if participant.device_sync_status.admin_notified_date %}
+          <div class="info-label">Admin Notified:</div>
+          <div>{{ participant.device_sync_status.admin_notified_date }}</div>
+          {% endif %}
+          
+          {% if participant.device_sync_status.had_fitbit_error %}
+          <div class="info-label">Warning Type:</div>
+          <div><span style="color: #dc3545; font-weight: bold;">Technical Error</span></div>
+          {% endif %}
+        </div>
+        
+        {% if participant.device_sync_status.notification_history %}
+          <div style="margin-top: 15px;">
+            <a href="javascript:void(0)" onclick="toggleSection('sync-history')" class="section-toggle">
+              ▶ View Notification History ({{ participant.device_sync_status.notification_history|length }})
+            </a>
+            <div id="sync-history" class="collapsible-section" style="margin-top: 10px;">
+              <table style="width: 100%; border-collapse: collapse; background: white;">
+                <thead>
+                  <tr style="background: #f8f9fa;">
+                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Date</th>
+                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Type</th>
+                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Days Missing</th>
+                    <th style="padding: 8px; text-align: left; border-bottom: 2px solid #ddd;">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for notif in participant.device_sync_status.notification_history %}
+                  <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ notif.date }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                      {% if notif.type == 'participant' %}
+                        <span style="color: #856404;">Participant</span>
+                      {% else %}
+                        <span style="color: #721c24; font-weight: bold;">Admin</span>
+                      {% endif %}
+                    </td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ notif.days_missing }}</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                      {% if notif.reason == 'technical_error' %}
+                        <span style="color: #dc3545;">Technical Error</span>
+                      {% else %}
+                        <span style="color: #856404;">User Sync Issue</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="error-section no-errors">
+        <h2 style="color: #155724; margin-top: 0;">✓ No Sync Warnings</h2>
+        <p style="margin-bottom: 0;">Device is syncing normally.</p>
+      </div>
+    {% endif %}
+  </div>
+
   <!-- Error Status Section -->
   <div class="content-section">
     {% if error_info.has_errors %}
