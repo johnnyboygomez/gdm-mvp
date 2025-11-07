@@ -231,44 +231,46 @@ def participant_detail_view(request, participant_id):
     # Calculate weekly summaries
     weekly_summaries = calculate_weekly_summaries(participant)
     
-    # ADD THIS SECTION - Extract error information
+    # Extract error information
     error_info = {
         'has_errors': False,
         'fitbit_data_error': None,
         'fitbit_token_error': None,
+        'target_calculation_error': None,
+        'notification_error': None,
     }
     
     # Check for Fitbit data fetch errors
     if participant.status_flags.get('fetch_fitbit_data_fail'):
         error_info['has_errors'] = True
         error_info['fitbit_data_error'] = {
-            'message': participant.status_flags.get('fetch_fitbit_data_last_error', 'Unknown error'),
-            'timestamp': participant.status_flags.get('fetch_fitbit_data_last_error_time')
+            'message': participant.status_flags.get('fetch_fitbit_data_fail_last_error', 'Unknown error'),
+            'timestamp': participant.status_flags.get('fetch_fitbit_data_fail_last_error_time')
         }
     
     # Check for Fitbit token refresh errors
     if participant.status_flags.get('refresh_fitbit_token_fail'):
         error_info['has_errors'] = True
         error_info['fitbit_token_error'] = {
-            'message': participant.status_flags.get('refresh_fitbit_token_last_error', 'Unknown error'),
-            'timestamp': participant.status_flags.get('refresh_fitbit_token_last_error_time')
+            'message': participant.status_flags.get('refresh_fitbit_token_fail_last_error', 'Unknown error'),
+            'timestamp': participant.status_flags.get('refresh_fitbit_token_fail_last_error_time')
         }
     
     # Check for target calculation errors
     if participant.status_flags.get('target_calculation_fail'):
         error_info['has_errors'] = True
         error_info['target_calculation_error'] = {
-            'message': participant.status_flags.get('target_calculation_last_error', 'Unknown error'),
-            'timestamp': participant.status_flags.get('target_calculation_last_error_time')
-    }
+            'message': participant.status_flags.get('target_calculation_fail_last_error', 'Unknown error'),
+            'timestamp': participant.status_flags.get('target_calculation_fail_last_error_time')
+        }
     
     # Check for notification sending errors
     if participant.status_flags.get('send_notification_fail'):
         error_info['has_errors'] = True
         error_info['notification_error'] = {
-            'message': participant.status_flags.get('send_notification_last_error', 'Unknown error'),
-            'timestamp': participant.status_flags.get('send_notification_last_error_time')
-    	}
+            'message': participant.status_flags.get('send_notification_fail_last_error', 'Unknown error'),
+            'timestamp': participant.status_flags.get('send_notification_fail_last_error_time')
+        }
     
     context = {
         "participant": participant,
@@ -276,8 +278,8 @@ def participant_detail_view(request, participant_id):
         "is_manager": is_manager,
         "user": request.user,
         "weekly_summaries": weekly_summaries,
-        "error_info": error_info,  # ADD THIS LINE
-    	}
+        "error_info": error_info,
+    }
     
     return render(request, "admin/participant_detail.html", context)
     
@@ -338,12 +340,12 @@ def calculate_weekly_summaries(participant):
                     except (ValueError, TypeError):
                         goal_met = None
 
-            # Find matching message (use None for missing values to match with message keys)
+        # Find matching message (use None for missing values to match with message keys)
         key = (
             target_data.get('new_target'),
-           	target_data.get('average_steps'),
+            target_data.get('average_steps'),
             goal_met,
-        	)
+        )
         message_content = message_lookup.get(key, "")
 
         summary = {
@@ -360,7 +362,7 @@ def calculate_weekly_summaries(participant):
         
         summaries.append(summary)
         
-        # Reverse to show latest week first and update week numbers
+    # Reverse to show latest week first and update week numbers
     summaries.reverse()
     
     return summaries
