@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     help = 'Check for participants with device sync issues and send notifications'
     
+    # Alert thresholds (in days)
+    PARTICIPANT_ALERT_DAYS = 1
+    ADMIN_ALERT_DAYS = 2
+    
     def add_arguments(self, parser):
         parser.add_argument(
             '--participant-id',
@@ -114,14 +118,24 @@ class Command(BaseCommand):
         Check a single participant's sync status and send notifications if needed.
         Returns a status string for summary reporting.
         """
+        # Safety check - ensure participant has a user with email
+        if not participant.user or not participant.user.email:
+            if self.verbose:
+                self.stdout.write(f"  Participant ID {participant.id}: No user or email - skipping")
+            return 'syncing_ok'
+        
         email = participant.user.email
         
         # Check if we previously had an error but it's now cleared
+        # Safely handle device_sync_status (could be None)
         current_status = participant.device_sync_status or {}
         had_fitbit_error_before = current_status.get('had_fitbit_error', False)
+        
+        # Safely check status_flags (could be None)
+        status_flags = participant.status_flags or {}
         has_fitbit_error_now = (
-            participant.status_flags.get('fetch_fitbit_data_fail', False) or
-            participant.status_flags.get('refresh_fitbit_token_fail', False)
+            status_flags.get('fetch_fitbit_data_fail', False) or
+            status_flags.get('refresh_fitbit_token_fail', False)
         )
         
         # If error was cleared, reset warnings to start fresh
@@ -136,7 +150,7 @@ class Command(BaseCommand):
         
         # Get today's step data
         daily_steps_dict = {}
-        if participant.daily_steps:
+        if participant.daily_steps is not None:
             for entry in participant.daily_steps:
                 date_key = entry.get('date')
                 steps_value = entry.get('value')
@@ -167,8 +181,8 @@ class Command(BaseCommand):
         # STEP 2: No data for today - count consecutive missing days
         consecutive_missing = self.count_consecutive_missing_days(participant, today, daily_steps_dict)
         
-        if consecutive_missing < 2:
-            # Less than 2 days - just monitoring
+        if consecutive_missing < self.PARTICIPANT_ALERT_DAYS:
+            # Less than threshold - just monitoring
             if self.verbose:
                 if consecutive_missing == 1:
                     self.stdout.write(f"  {email}: 1 day missing - monitoring")
@@ -176,7 +190,7 @@ class Command(BaseCommand):
                     self.stdout.write(f"  {email}: OK (recent data)")
             return 'syncing_ok'
         
-        # STEP 3: 2+ days missing - check for Fitbit API/token errors FIRST
+        # STEP 3: threshold+ days missing - check for Fitbit API/token errors FIRST
         has_fitbit_error = has_fitbit_error_now  # Use the value we calculated earlier
         
         participant_notified = current_status.get('participant_notified_date')
@@ -186,10 +200,10 @@ class Command(BaseCommand):
             # Technical error detected - notify admin regardless of day count
             if not admin_notified:
                 error_msg = ""
-                if participant.status_flags.get('fetch_fitbit_data_fail'):
-                    error_msg = participant.status_flags.get('fetch_fitbit_data_fail_last_error', 'Unknown error')
-                elif participant.status_flags.get('refresh_fitbit_token_fail'):
-                    error_msg = participant.status_flags.get('refresh_fitbit_token_fail_last_error', 'Unknown error')
+                if status_flags.get('fetch_fitbit_data_fail'):
+                    error_msg = status_flags.get('fetch_fitbit_data_fail_last_error', 'Unknown error')
+                elif status_flags.get('refresh_fitbit_token_fail'):
+                    error_msg = status_flags.get('refresh_fitbit_token_fail_last_error', 'Unknown error')
                 
                 self.stdout.write(
                     self.style.ERROR(
@@ -214,8 +228,8 @@ class Command(BaseCommand):
                 return 'already_warned'
         
         # STEP 4: No technical error - follow normal user/admin flow
-        if consecutive_missing >= 3:
-            # 3+ days missing - admin notification needed
+        if consecutive_missing >= self.ADMIN_ALERT_DAYS:
+            # threshold+ days missing - admin notification needed
             if not admin_notified:
                 self.stdout.write(
                     self.style.ERROR(
@@ -236,8 +250,8 @@ class Command(BaseCommand):
                     self.update_device_sync_status(participant, consecutive_missing, has_error=False)
                 return 'already_warned'
         
-        elif consecutive_missing >= 2:
-            # 2 days missing - participant notification needed
+        elif consecutive_missing >= self.PARTICIPANT_ALERT_DAYS:
+            # threshold days missing - participant notification needed
             if not participant_notified:
                 self.stdout.write(
                     self.style.WARNING(
@@ -267,8 +281,12 @@ class Command(BaseCommand):
         consecutive_missing = 0
         check_date = today - timedelta(days=1)  # Start from yesterday
         
-        # Don't go back before study start date
+        # Don't go back before study start date (if it exists)
         start_date = participant.start_date
+        if start_date is None:
+            # If no start_date, we can't determine a valid range
+            # Default to checking last 30 days as a reasonable limit
+            start_date = today - timedelta(days=30)
         
         while check_date >= start_date:
             check_date_str = check_date.strftime('%Y-%m-%d')
@@ -287,7 +305,12 @@ class Command(BaseCommand):
     def get_last_data_date(self, participant, today, daily_steps_dict):
         """Find the most recent date with step data >= 1."""
         check_date = today - timedelta(days=1)
+        
+        # Don't go back before study start date (if it exists)
         start_date = participant.start_date
+        if start_date is None:
+            # If no start_date, default to checking last 30 days
+            start_date = today - timedelta(days=30)
         
         while check_date >= start_date:
             check_date_str = check_date.strftime('%Y-%m-%d')
@@ -307,7 +330,7 @@ class Command(BaseCommand):
         status['had_fitbit_error'] = has_error
         
         # Set warning_started_date if this is a new warning
-        if consecutive_missing_days >= 2 and 'warning_started_date' not in status:
+        if consecutive_missing_days >= self.PARTICIPANT_ALERT_DAYS and 'warning_started_date' not in status:
             status['warning_started_date'] = timezone.now().date().isoformat()
         
         participant.device_sync_status = status
@@ -371,34 +394,30 @@ class Command(BaseCommand):
     def send_participant_notification(self, participant, consecutive_missing_days):
         """Send email notification to participant about missing data."""
         from django.core.mail import send_mail
-        from django.conf import settings
-        import logging
 
-        logger = logging.getLogger(__name__)
-
-        language = participant.language
+        language = participant.language or 'en'  # Default to English if None
         if language == 'fr':
             subject = "Action requise : Veuillez synchroniser votre appareil Fitbit"
 
             message = f"""Bonjour,
-Nous avons remarqué que votre appareil Fitbit n’a pas synchronisé de données depuis {consecutive_missing_days} jours.
+Nous avons remarqué que votre appareil Fitbit n'a pas synchronisé de données depuis {consecutive_missing_days} jours.
 
-Pour vous assurer que vos données d’activité sont bien enregistrées, veuillez :
+Pour vous assurer que vos données d'activité sont bien enregistrées, veuillez :
 
 Vérifier que le Bluetooth est activé sur votre cellulaire
 
-Ouvrir l’application Fitbit
+Ouvrir l'application Fitbit
 
 Attendre que votre appareil se synchronise (vous devriez voir une animation de synchronisation)
 
-Vérifier que le nombre de pas d’aujourd’hui s’affiche dans votre application
+Vérifier que le nombre de pas d'aujourd'hui s'affiche dans votre application
 
 Si vous éprouvez des difficultés à synchroniser votre appareil, veuillez répondre à ce courriel et nous vous aiderons à résoudre le problème.
 
 Merci de votre participation à notre étude!
 
 Cordialement,
-L’équipe de recherche
+L'équipe de recherche
 """
 
         else:
@@ -503,7 +522,7 @@ NOTE: Participant was NOT notified since this appears to be a technical issue.
         
         # Get last sync date info
         daily_steps_dict = {}
-        if participant.daily_steps:
+        if participant.daily_steps is not None:
             for entry in participant.daily_steps:
                 date_key = entry.get('date')
                 steps_value = entry.get('value')
@@ -521,7 +540,7 @@ Consecutive Missing Days: {consecutive_missing_days}
 Last Data Received: {last_data_str}
 
 This participant's Fitbit device has not synced for {consecutive_missing_days} days. 
-A notification was previously sent to the participant after 2 days of missing data.
+A notification was previously sent to the participant after {self.PARTICIPANT_ALERT_DAYS} days of missing data.
 
 Action Required:
 Please follow up with this participant directly to:
