@@ -35,7 +35,7 @@ EMAIL_PORT = 587
 EMAIL_HOST_USER = 'rimuhc.john@gmail.com'
 EMAIL_HOST_PASSWORD = 'nilj mbbk nqnx uvku'
 EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER  # Or another sender address if you prefer
+DEFAULT_FROM_EMAIL = 'debora.rosa@rimuhc.ca'  # Or another sender address if you prefer
 
 GOAL_NOTIFICATION_CC = [
     "john.dowling@rimuhc.ca",

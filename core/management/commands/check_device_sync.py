@@ -398,9 +398,10 @@ class Command(BaseCommand):
         language = participant.language or 'en'  # Default to English if None
         if language == 'fr':
             subject = "Action requise : Veuillez synchroniser votre appareil Fitbit"
+            days_text = "jour" if consecutive_missing_days == 1 else "jours"
 
             message = f"""Bonjour,
-Nous avons remarqué que votre appareil Fitbit n'a pas synchronisé de données depuis {consecutive_missing_days} jours.
+Nous avons remarqué que votre appareil Fitbit n'a pas synchronisé de données depuis {consecutive_missing_days} {days_text}.
 
 Pour vous assurer que vos données d'activité sont bien enregistrées, veuillez :
 
@@ -422,10 +423,11 @@ L'équipe de recherche
 
         else:
             subject = "Action Required: Please Sync Your Fitbit Device"
+            days_text = "day" if consecutive_missing_days == 1 else "days"
 
             message = f"""Hello,
 
-We noticed that your Fitbit device hasn't synced data for the past {consecutive_missing_days} days.
+We noticed that your Fitbit device hasn't synced data for the past {consecutive_missing_days} {days_text}.
 
 To ensure your activity data is being recorded properly, please:
 
