@@ -271,6 +271,9 @@ class Command(BaseCommand):
                 if not self.dry_run:
                     self.update_device_sync_status(participant, consecutive_missing, has_error=False)
                 return 'already_warned'
+        # Should never reach here, but safety fallback
+        logger.warning(f"Unexpected path in check_participant_sync for {email}")
+        return 'syncing_ok'
     
     def count_consecutive_missing_days(self, participant, today, daily_steps_dict):
         """
@@ -413,7 +416,7 @@ Attendre que votre appareil se synchronise (vous devriez voir une animation de s
 
 Vérifier que le nombre de pas d'aujourd'hui s'affiche dans votre application
 
-Si vous éprouvez des difficultés à synchroniser votre appareil, veuillez répondre à ce courriel et nous vous aiderons à résoudre le problème.
+Si vous éprouvez des difficultés à synchroniser votre appareil, veuillez répondre à ce courriel ou nous appeler au 438-346-0479 et nous vous aiderons à résoudre le problème.
 
 Merci de votre participation à notre étude!
 
@@ -436,7 +439,7 @@ To ensure your activity data is being recorded properly, please:
 3. Wait for your device to sync (you should see a sync animation)
 4. Verify that today's steps are showing in your app
 
-If you're having trouble syncing your device, please reply to this email and we'll help you troubleshoot.
+If you're having trouble syncing your device, please reply to this email or call us at 438-346-0479 and we'll help you troubleshoot.
 
 Thank you for your participation in our study!
 
@@ -497,13 +500,16 @@ NOTE: Participant was NOT notified since this appears to be a technical issue.
         
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'john.dowling@rimuhc.ca')
         admin_email = getattr(settings, 'ADMIN_NOTIFICATION_EMAIL', from_email)
-        
+
+        # Handle both single email (string) and multiple emails (list)
+        recipient_list = admin_email if isinstance(admin_email, list) else [admin_email]
+
         try:
             send_mail(
                 subject=subject,
                 message=message,
                 from_email=from_email,
-                recipient_list=[admin_email],
+                recipient_list=recipient_list,
                 fail_silently=False,
             )
             logger.info(f"Sent admin technical error notification for participant {participant.user.email}")
@@ -557,13 +563,16 @@ This is an automated notification from the device sync monitoring system.
         
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'john.dowling@rimuhc.ca')
         admin_email = getattr(settings, 'ADMIN_NOTIFICATION_EMAIL', from_email)
-        
+
+        # Handle both single email (string) and multiple emails (list)
+        recipient_list = admin_email if isinstance(admin_email, list) else [admin_email]
+
         try:
             send_mail(
                 subject=subject,
                 message=message,
                 from_email=from_email,
-                recipient_list=[admin_email],
+                recipient_list=recipient_list,
                 fail_silently=False,
             )
             logger.info(f"Sent admin notification for participant {participant.user.email}")

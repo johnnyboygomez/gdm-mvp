@@ -149,6 +149,13 @@ def _calculate_target_met_matrix(current_avg, previous_increase):
 
 def _calculate_target_missed_matrix(current_avg, previous_increase):
     """Target missed logic - direct translation from PHP algorithm"""
+       
+    # DEBUG LOGGING
+   	# logger.info(f"=== DEBUG _calculate_target_missed_matrix ===")
+    # logger.info(f"current_avg: {current_avg} (type: {type(current_avg)})")
+   	# logger.info(f"previous_increase: {previous_increase} (type: {type(previous_increase)})")
+   	# logger.info(f"previous_increase == 1000: {previous_increase == 1000}")
+    # logger.info(f"previous_increase == 'increase to 10000': {previous_increase == 'increase to 10000'}")
     
     # Special case: if previous was maintain, return 1000
     if previous_increase == 0:  # "maintain" parsed as 0

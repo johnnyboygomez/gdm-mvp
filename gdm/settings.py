@@ -23,7 +23,11 @@ import dj_database_url
 
 import os
 
-ADMIN_NOTIFICATION_EMAIL = 'john.dowling@rimuhc.ca'
+ADMIN_NOTIFICATION_EMAIL = [
+    'john.dowling@rimuhc.ca',
+    'partnerstept2d@muhc.mcgill.ca'
+]
+
 BASE_URL = 'https://gdm-mvp.onrender.com/admin'  # For links in admin emails
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -39,6 +43,7 @@ DEFAULT_FROM_EMAIL = 'debora.rosa@rimuhc.ca'  # Or another sender address if you
 
 GOAL_NOTIFICATION_CC = [
     "john.dowling@rimuhc.ca",
+    "partnerstept2d@muhc.mcgill.ca",
 ]
 
 DEFAULT_DEVICE_TYPE = 'fitbit'
