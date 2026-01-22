@@ -262,21 +262,15 @@ Retention: {self.RETENTION_WEEKS} weeks
             result = dbx.files_list_folder(self.BACKUP_FOLDER)
             files = result.entries
             
-            # Calculate cutoff date (ensure timezone-aware UTC)
+            # Calculate cutoff date - timezone.now() returns UTC-aware datetime
             cutoff_date = timezone.now() - timedelta(weeks=self.RETENTION_WEEKS)
-            # Ensure we're comparing in UTC
-            from django.utils.timezone import make_aware, is_aware
-            import pytz
-            if not is_aware(cutoff_date):
-                cutoff_date = make_aware(cutoff_date, pytz.UTC)
             
             deleted_count = 0
             for entry in files:
                 if isinstance(entry, dropbox.files.FileMetadata):
-                    # Check if file is older than retention period
-                    # entry.server_modified is timezone-aware UTC from Dropbox
-                    # Ensure cutoff_date is also UTC for comparison
-                    if entry.server_modified.replace(tzinfo=pytz.UTC) < cutoff_date:
+                    # Both entry.server_modified (from Dropbox) and cutoff_date are UTC-aware
+                    # so we can compare them directly
+                    if entry.server_modified < cutoff_date:
                         dbx.files_delete_v2(entry.path_display)
                         deleted_count += 1
                         self.stdout.write(f"  Deleted: {entry.name}")
