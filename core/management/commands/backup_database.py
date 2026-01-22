@@ -256,6 +256,8 @@ Retention: {self.RETENTION_WEEKS} weeks
             return 0
         
         try:
+            from datetime import timezone as dt_timezone
+            
             dbx = dropbox.Dropbox(dropbox_token)
             
             # List all files in backup folder
@@ -268,9 +270,15 @@ Retention: {self.RETENTION_WEEKS} weeks
             deleted_count = 0
             for entry in files:
                 if isinstance(entry, dropbox.files.FileMetadata):
-                    # Both entry.server_modified (from Dropbox) and cutoff_date are UTC-aware
-                    # so we can compare them directly
-                    if entry.server_modified < cutoff_date:
+                    # entry.server_modified from Dropbox might be naive or aware
+                    # Make it timezone-aware if it isn't already
+                    entry_modified = entry.server_modified
+                    if timezone.is_naive(entry_modified):
+                        # Dropbox times are UTC, so make it aware as UTC
+                        entry_modified = timezone.make_aware(entry_modified, dt_timezone.utc)
+                    
+                    # Now both are timezone-aware and can be compared
+                    if entry_modified < cutoff_date:
                         dbx.files_delete_v2(entry.path_display)
                         deleted_count += 1
                         self.stdout.write(f"  Deleted: {entry.name}")
