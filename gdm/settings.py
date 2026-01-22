@@ -50,6 +50,8 @@ DEFAULT_DEVICE_TYPE = 'fitbit'
 
 AUTH_USER_MODEL = 'core.CustomUser'
 
+# Dropbox backup configuration
+DROPBOX_ACCESS_TOKEN = os.getenv('DROPBOX_ACCESS_TOKEN')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
