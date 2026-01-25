@@ -51,7 +51,7 @@ DEFAULT_DEVICE_TYPE = 'fitbit'
 AUTH_USER_MODEL = 'core.CustomUser'
 
 # Google Cloud Storage backup configuration
-GCS_CREDENTIALS_PATH = os.getenv('GCS_CREDENTIALS_PATH', '/etc/secrets/gcs-credentials.json')
+GCS_CREDENTIALS_PATH = os.getenv('GCS_CREDENTIALS_PATH', '/etc/secrets/partner-backups-credentials.json')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
