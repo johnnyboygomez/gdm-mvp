@@ -7,18 +7,19 @@ import subprocess
 import os
 import logging
 from datetime import datetime, timedelta
-import dropbox
-from dropbox.exceptions import ApiError, AuthError
+from google.cloud import storage
+from google.oauth2 import service_account
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Create PostgreSQL backup and upload to Dropbox with automatic rotation'
+    help = 'Create PostgreSQL backup and upload to Google Cloud Storage with automatic rotation'
     
     # Configuration
     RETENTION_WEEKS = 52
-    BACKUP_FOLDER = '/PartnerStepsT2D/backups'  # Folder in Dropbox
+    BUCKET_NAME = 'partner-steps-backups'  # Your GCS bucket name
+    BACKUP_FOLDER = 'backups'  # Folder within bucket
     
     def add_arguments(self, parser):
         parser.add_argument(
@@ -29,7 +30,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--test-connection',
             action='store_true',
-            help='Test Dropbox connection and exit',
+            help='Test Google Cloud Storage connection and exit',
         )
     
     def handle(self, *args, **options):
@@ -43,7 +44,7 @@ class Command(BaseCommand):
         
         # Test connection mode
         if options['test_connection']:
-            return self.test_dropbox_connection()
+            return self.test_gcs_connection()
         
         backup_file = None  # Track the file for cleanup
         try:
@@ -56,14 +57,14 @@ class Command(BaseCommand):
             
             self.stdout.write(self.style.SUCCESS(f"✓ Created dump: {backup_file}"))
             
-            # Step 2: Upload to Dropbox
-            self.stdout.write("\nStep 2: Uploading to Dropbox...")
-            dropbox_path = self.upload_to_dropbox(backup_file)
+            # Step 2: Upload to Google Cloud Storage
+            self.stdout.write("\nStep 2: Uploading to Google Cloud Storage...")
+            gcs_path = self.upload_to_gcs(backup_file)
             
-            if not dropbox_path:
-                raise Exception("Failed to upload to Dropbox")
+            if not gcs_path:
+                raise Exception("Failed to upload to Google Cloud Storage")
             
-            self.stdout.write(self.style.SUCCESS(f"✓ Uploaded to: {dropbox_path}"))
+            self.stdout.write(self.style.SUCCESS(f"✓ Uploaded to: gs://{self.BUCKET_NAME}/{gcs_path}"))
             
             # Step 3: Clean up old backups
             self.stdout.write("\nStep 3: Cleaning up old backups...")
@@ -78,7 +79,7 @@ class Command(BaseCommand):
 Backup completed successfully in {duration:.1f} seconds
 
 Database: {self.get_database_name()}
-Backup file: {dropbox_path}
+Backup file: gs://{self.BUCKET_NAME}/{gcs_path}
 Size: {self.get_file_size_mb(backup_file):.2f} MB
 Retention: {self.RETENTION_WEEKS} weeks
 """
@@ -91,7 +92,7 @@ Retention: {self.RETENTION_WEEKS} weeks
             self.send_notification_email(
                 success=True,
                 message=success_message,
-                backup_path=dropbox_path
+                backup_path=f"gs://{self.BUCKET_NAME}/{gcs_path}"
             )
             
         except Exception as e:
@@ -115,6 +116,19 @@ Retention: {self.RETENTION_WEEKS} weeks
                     self.stdout.write(self.style.SUCCESS(f"✓ Cleaned up local file"))
                 except Exception as cleanup_error:
                     logger.warning(f"Failed to cleanup {backup_file}: {cleanup_error}")
+    
+    def get_gcs_client(self):
+        """Get authenticated Google Cloud Storage client."""
+        credentials_path = getattr(settings, 'GCS_CREDENTIALS_PATH', None)
+        
+        if not credentials_path:
+            raise Exception("GCS_CREDENTIALS_PATH not configured in settings")
+        
+        if not os.path.exists(credentials_path):
+            raise Exception(f"GCS credentials file not found: {credentials_path}")
+        
+        credentials = service_account.Credentials.from_service_account_file(credentials_path)
+        return storage.Client(credentials=credentials, project=credentials.project_id)
     
     def get_database_config(self):
         """Extract database configuration from Django settings."""
@@ -198,98 +212,56 @@ Retention: {self.RETENTION_WEEKS} weeks
             logger.error(f"pg_dump failed: {e.stderr}")
             return None
     
-    def upload_to_dropbox(self, local_file):
-        """Upload backup file to Dropbox."""
+    def upload_to_gcs(self, local_file):
+        """Upload backup file to Google Cloud Storage."""
         if self.dry_run:
             return f"{self.BACKUP_FOLDER}/{os.path.basename(local_file)}"
         
-        # Get Dropbox token from settings
-        dropbox_token = getattr(settings, 'DROPBOX_ACCESS_TOKEN', None)
-        if not dropbox_token:
-            raise Exception("DROPBOX_ACCESS_TOKEN not configured in settings")
-        
         try:
-            dbx = dropbox.Dropbox(dropbox_token)
+            client = self.get_gcs_client()
+            bucket = client.bucket(self.BUCKET_NAME)
             
-            # Verify connection
-            dbx.users_get_current_account()
-            
-            # Ensure backup folder exists
-            try:
-                dbx.files_get_metadata(self.BACKUP_FOLDER)
-            except ApiError as e:
-                if e.error.is_path() and e.error.get_path().is_not_found():
-                    # Folder doesn't exist, create it
-                    dbx.files_create_folder_v2(self.BACKUP_FOLDER)
-                    logger.info(f"Created Dropbox folder: {self.BACKUP_FOLDER}")
-                else:
-                    raise
-            
-            # Prepare Dropbox path
+            # Prepare GCS path
             filename = os.path.basename(local_file)
-            dropbox_path = f"{self.BACKUP_FOLDER}/{filename}"
+            blob_name = f"{self.BACKUP_FOLDER}/{filename}"
+            blob = bucket.blob(blob_name)
             
             # Upload file
-            with open(local_file, 'rb') as f:
-                dbx.files_upload(
-                    f.read(),
-                    dropbox_path,
-                    mode=dropbox.files.WriteMode.overwrite
-                )
+            blob.upload_from_filename(local_file)
             
-            return dropbox_path
+            return blob_name
             
-        except AuthError as e:
-            logger.error(f"Dropbox authentication failed: {e}")
-            raise Exception("Dropbox authentication failed. Check DROPBOX_ACCESS_TOKEN.")
-        except ApiError as e:
-            logger.error(f"Dropbox API error: {e}")
-            raise
+        except Exception as e:
+            logger.error(f"Google Cloud Storage upload failed: {e}")
+            raise Exception(f"Failed to upload to Google Cloud Storage: {str(e)}")
     
     def cleanup_old_backups(self):
         """Delete backups older than RETENTION_WEEKS."""
         if self.dry_run:
             return 0
         
-        dropbox_token = getattr(settings, 'DROPBOX_ACCESS_TOKEN', None)
-        if not dropbox_token:
-            return 0
-        
         try:
-            from datetime import timezone as dt_timezone
+            client = self.get_gcs_client()
+            bucket = client.bucket(self.BUCKET_NAME)
             
-            dbx = dropbox.Dropbox(dropbox_token)
-            
-            # List all files in backup folder
-            result = dbx.files_list_folder(self.BACKUP_FOLDER)
-            files = result.entries
+            # List all blobs in backup folder
+            blobs = bucket.list_blobs(prefix=f"{self.BACKUP_FOLDER}/")
             
             # Calculate cutoff date - timezone.now() returns UTC-aware datetime
             cutoff_date = timezone.now() - timedelta(weeks=self.RETENTION_WEEKS)
             
             deleted_count = 0
-            for entry in files:
-                if isinstance(entry, dropbox.files.FileMetadata):
-                    # entry.server_modified from Dropbox might be naive or aware
-                    # Make it timezone-aware if it isn't already
-                    entry_modified = entry.server_modified
-                    if timezone.is_naive(entry_modified):
-                        # Dropbox times are UTC, so make it aware as UTC
-                        entry_modified = timezone.make_aware(entry_modified, dt_timezone.utc)
-                    
-                    # Now both are timezone-aware and can be compared
-                    if entry_modified < cutoff_date:
-                        dbx.files_delete_v2(entry.path_display)
-                        deleted_count += 1
-                        self.stdout.write(f"  Deleted: {entry.name}")
+            for blob in blobs:
+                # blob.time_created is timezone-aware UTC from Google Cloud
+                if blob.time_created < cutoff_date:
+                    blob.delete()
+                    deleted_count += 1
+                    self.stdout.write(f"  Deleted: {blob.name}")
             
             return deleted_count
             
-        except ApiError as e:
-            if e.error.is_path() and e.error.get_path().is_not_found():
-                # Folder doesn't exist yet, that's okay
-                return 0
-            logger.error(f"Dropbox cleanup error: {e}")
+        except Exception as e:
+            logger.error(f"Google Cloud Storage cleanup error: {e}")
             return 0
     
     def get_file_size_mb(self, filepath):
@@ -317,7 +289,7 @@ Retention: {self.RETENTION_WEEKS} weeks
 
 {message}
 
-Dropbox Path: {backup_path}
+Google Cloud Storage Path: {backup_path}
 
 This is an automated notification from the backup system.
 """
@@ -348,41 +320,36 @@ This is an automated notification from the backup system.
             logger.error(f"Failed to send notification email: {e}")
             # Don't raise - backup succeeded even if email failed
     
-    def test_dropbox_connection(self):
-        """Test Dropbox connection and display account info."""
-        self.stdout.write("Testing Dropbox connection...\n")
-        
-        dropbox_token = getattr(settings, 'DROPBOX_ACCESS_TOKEN', None)
-        
-        if not dropbox_token:
-            self.stderr.write(self.style.ERROR(
-                "✗ DROPBOX_ACCESS_TOKEN not configured in settings"
-            ))
-            return
+    def test_gcs_connection(self):
+        """Test Google Cloud Storage connection and display bucket info."""
+        self.stdout.write("Testing Google Cloud Storage connection...\n")
         
         try:
-            dbx = dropbox.Dropbox(dropbox_token)
-            account = dbx.users_get_current_account()
+            client = self.get_gcs_client()
+            bucket = client.bucket(self.BUCKET_NAME)
+            
+            # Check if bucket exists and we have access
+            if not bucket.exists():
+                self.stderr.write(self.style.ERROR(
+                    f"✗ Bucket does not exist: {self.BUCKET_NAME}"
+                ))
+                return
             
             self.stdout.write(self.style.SUCCESS("✓ Connection successful!"))
-            self.stdout.write(f"\nAccount: {account.name.display_name}")
-            self.stdout.write(f"Email: {account.email}")
+            self.stdout.write(f"\nBucket: {self.BUCKET_NAME}")
+            self.stdout.write(f"Location: {bucket.location}")
+            self.stdout.write(f"Storage class: {bucket.storage_class}")
             
-            # Try to access backup folder
-            try:
-                result = dbx.files_list_folder(self.BACKUP_FOLDER)
-                self.stdout.write(f"\n✓ Backup folder exists: {self.BACKUP_FOLDER}")
-                self.stdout.write(f"  Contains {len(result.entries)} file(s)")
-            except ApiError as e:
-                if e.error.is_path() and e.error.get_path().is_not_found():
-                    self.stdout.write(f"\n⚠ Backup folder does not exist yet: {self.BACKUP_FOLDER}")
-                    self.stdout.write("  (Folder will be created automatically on first backup)")
-                else:
-                    raise
+            # List existing backups
+            blobs = list(bucket.list_blobs(prefix=f"{self.BACKUP_FOLDER}/"))
+            self.stdout.write(f"\n✓ Backup folder: {self.BACKUP_FOLDER}/")
+            self.stdout.write(f"  Contains {len(blobs)} file(s)")
             
-        except AuthError:
-            self.stderr.write(self.style.ERROR(
-                "✗ Authentication failed. Check your DROPBOX_ACCESS_TOKEN."
-            ))
+            if blobs:
+                self.stdout.write("\n  Recent backups:")
+                for blob in sorted(blobs, key=lambda b: b.time_created, reverse=True)[:5]:
+                    size_mb = blob.size / (1024 * 1024)
+                    self.stdout.write(f"    - {blob.name} ({size_mb:.2f} MB, {blob.time_created.strftime('%Y-%m-%d %H:%M')})")
+            
         except Exception as e:
             self.stderr.write(self.style.ERROR(f"✗ Connection failed: {e}"))
