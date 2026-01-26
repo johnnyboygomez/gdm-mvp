@@ -2,7 +2,6 @@
 from datetime import datetime, date, timedelta
 from django.utils import timezone
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +68,15 @@ def calculate_step_increase(current_avg, last_goal_data=None, target_was_met=Tru
         tuple: (increase_description, new_target_value)
     """
     
-    # Validate input
-    if not validate_step_data(current_avg):
-        current_avg = max(1000, min(current_avg, 50000))
+    # Safely convert to int first, then validate
+    try:
+        current_avg = int(current_avg)
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid current_avg type, defaulting to 1000: {current_avg}")
+        current_avg = 1000
     
-    current_avg = int(current_avg)
+    # Clamp to reasonable range
+    current_avg = max(1000, min(current_avg, 50000))
     
     # First week logic (no previous goal)
     if not last_goal_data:
@@ -283,7 +286,7 @@ def get_step_data_for_week(daily_steps, week_start, week_end):
     
     return week_steps
 
-def run_weekly_algorithm(participant):
+def run_weekly_algorithm(participant, use_fallback=False, fallback_days_count=None):
     """
     Compute and save a weekly step goal for a participant.
 
@@ -292,11 +295,16 @@ def run_weekly_algorithm(participant):
     - Sets goals for the current/upcoming week
     - Allows re-running on same day (for updated data scenarios)
     
+    Args:
+        participant: Participant object
+        use_fallback: If True, allows calculation without today's data (for 17:00 fallback)
+        fallback_days_count: Number of days found when in fallback mode (for metadata)
+    
     Returns:
         dict: Goal data or None
     """
     
-    logger.info(f"Running weekly algorithm for participant {participant.id}")
+    logger.info(f"Running weekly algorithm for participant {participant.id} (fallback={use_fallback})")
     
     today = date.today()
     
@@ -331,18 +339,27 @@ def run_weekly_algorithm(participant):
         # Get previous goal data - direct calculation approach
         last_goal_data = None
         if weeks_since_start > 1:  # Only look for previous goal if we're past week 2
+            # Find most recent valid target (skip over any previous skipped weeks)
             previous_week_start = target_week_start - timedelta(days=7)
-            previous_week_key = previous_week_start.strftime("%Y-%m-%d")
             
-            if participant.targets:
-                last_goal_data = participant.targets.get(previous_week_key)
-                if last_goal_data:
-                    logger.info(f"Found previous goal for week {previous_week_key}: {last_goal_data}")
-                else:
-                    # TRACK ERROR: Missing previous goal when expected
-                    error_msg = f"Missing previous goal data for week {previous_week_key}"
-                    logger.warning(error_msg)
-                    _log_status_flag(participant, "target_calculation_fail", error_msg)
+            # Look back up to 10 weeks to find a non-skipped target
+            for lookback in range(10):
+                check_week_start = previous_week_start - timedelta(days=7 * lookback)
+                check_week_key = check_week_start.strftime("%Y-%m-%d")
+                
+                if participant.targets and check_week_key in participant.targets:
+                    candidate_goal = participant.targets[check_week_key]
+                    # Skip over weeks that were skipped due to insufficient data
+                    if candidate_goal.get('calculation_method') != 'skipped_week':
+                        last_goal_data = candidate_goal
+                        logger.info(f"Found previous goal for week {check_week_key}: {last_goal_data}")
+                        break
+            
+            if not last_goal_data and weeks_since_start > 1:
+                # TRACK ERROR: Missing previous goal when expected
+                error_msg = f"Missing previous goal data (checked back 10 weeks)"
+                logger.warning(error_msg)
+                _log_status_flag(participant, "target_calculation_fail", error_msg)
             
             logger.info(f"Using previous goal data: {last_goal_data}")
         else:
@@ -351,6 +368,12 @@ def run_weekly_algorithm(participant):
         # Get step data for the completed week
         week_steps = get_step_data_for_week(daily_steps, analysis_week_start, analysis_week_end)
         logger.info(f"Found {len(week_steps)} days of step data for analysis week")
+
+        # Determine calculation method for metadata
+        calculation_method = 'normal'
+        if use_fallback:
+            calculation_method = 'partial_data'
+            logger.info(f"Using fallback mode with {fallback_days_count or len(week_steps)} days of data")
 
         # Calculate goal based on available data
         if len(week_steps) >= 4:
@@ -378,19 +401,24 @@ def run_weekly_algorithm(participant):
             # Don't calculate or send notification when insufficient data
             return None
 
-        # Save the goal to participant.targets - USES ORIGINAL FIELD NAMES
+        # Save the goal to participant.targets
         target_week_key = target_week_start.strftime("%Y-%m-%d")
         targets = participant.targets or {}
         targets[target_week_key] = {
             "increase": goal_data["increase"],
-            "average_steps": goal_data["average_steps"],  # RESTORED: consistent with old data
+            "average_steps": goal_data["average_steps"],
             "new_target": goal_data["new_target"]
         }
         
-        participant.targets = targets
-        participant.save(update_fields=["targets", "status_flags"])
+        # Add metadata for fallback calculations
+        if calculation_method == 'partial_data':
+            targets[target_week_key]['calculation_method'] = 'partial_data'
+            targets[target_week_key]['days_with_data'] = fallback_days_count or len(week_steps)
         
-        logger.info(f"Successfully created and saved weekly goal: {goal_data}")
+        participant.targets = targets
+        participant.save(update_fields=["targets"])
+        
+        logger.info(f"Successfully created and saved weekly goal: {goal_data} (method: {calculation_method})")
         return goal_data
         
     except Exception as e:
