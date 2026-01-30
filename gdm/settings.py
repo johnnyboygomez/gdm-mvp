@@ -39,7 +39,7 @@ EMAIL_PORT = 587
 EMAIL_HOST_USER = 'rimuhc.john@gmail.com'
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'debora.rosa@rimuhc.ca')  # Or another sender address if you prefer
+DEFAULT_FROM_EMAIL = 'rimuhc.john@gmail.com'   # Or another sender address if you prefer
 
 GOAL_NOTIFICATION_CC = [
     "john.dowling@rimuhc.ca",
