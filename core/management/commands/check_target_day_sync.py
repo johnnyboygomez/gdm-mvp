@@ -233,7 +233,7 @@ View participant: {settings.BASE_URL}/admin/participant/{participant.id}/
 This is an automated alert from the target day monitoring system.
 """
         
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'debora.rosa@rimuhc.ca')
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'partnersteprimuhc@gmail.com')
         admin_emails = getattr(settings, 'ADMIN_NOTIFICATION_EMAIL', [from_email])
         
         # Handle both single email (string) and multiple emails (list)
