@@ -197,7 +197,7 @@ def _calculate_target_missed_matrix(current_avg, previous_increase):
         if previous_increase == 500:
             return "500", current_avg + 500
         elif previous_increase == 1000:
-            return "250", current_avg + 250
+            return "500", current_avg + 500
         elif previous_increase == "increase to 10000":
             return "increase to 10000", 10000
     
