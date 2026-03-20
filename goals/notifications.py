@@ -15,7 +15,7 @@ ENGLISH_TIPS_NOT_MET = [
   "New week, new opportunity to do things differently and to reach your goal!",
   "When in your day could you take 10 minutes to go on a short walk?",
   "For many people, a good way to increase their walking is by integrating it with other daily or weekly task. For example, try walking to your local grocery store at least once a week. It could be a great opportunity to buy some fresh foods!",
-  "Add some steps while you are having fun! Bowling, dancing, or even going to the museum will help you naturally increase your step count. What’s a fun activity that you could plan to make you move more?",
+  "Add some steps while you are having fun! Bowling, dancing, or even going to the museum will help you naturally increase your step count. What's a fun activity that you could plan to make you move more?",
   "Listening to music, listening to a podcast, talking with someone, or taking time for yourself while you walk. What would make your walk more enjoyable?",
   "Taking just a 10-minute walk after a meal is associated with several health benefits. After which meal could you try that?",
   "Where do you like to walk? In a park, in your favorite neighborhood, in the forest?",
@@ -27,7 +27,7 @@ ENGLISH_TIPS_NOT_MET = [
   "Family who walk together are all becoming healthier. Who would you like to bring with you? Your partner, your kids, your parents, siblings?",
   "Do you have some friends or family members who are active people? Try planning an active social gathering with them.",
   "Remember that taking a few steps is always better than none.",
-  "We all have days when it is harder to be active. Don’t worry it is normal. Tomorrow will be a new day",
+  "We all have days when it is harder to be active. Don't worry it is normal. Tomorrow will be a new day",
   "Feeling low in energy? Our first response is often to sit and do less. However, for many people, just taking a 10-minute walk will make them feel better. Try it and see how it makes you feel"
 ]
 
@@ -48,7 +48,7 @@ ENGLISH_TIPS_MET = [
 # French tips for when goals are NOT met
 FRENCH_TIPS_NOT_MET = [
   "Certaines personnes préfèrent marcher tôt le matin, d'autres le font pendant leur pause du midi, et pour d'autres encore, il est plus facile de marcher le soir. Quel moment de la journée vous convient le mieux ?",
-  "Beaucoup de gens trouvent ça plus facile de marcher en compagnie de quelqu’un d’autre. Qui aimeriez-vous inviter à vous accompagner ?",
+  "Beaucoup de gens trouvent ça plus facile de marcher en compagnie de quelqu'un d'autre. Qui aimeriez-vous inviter à vous accompagner ?",
   "Essayez d'analyser ce qui vous a empêché d'atteindre vos objectifs de marche. Que pourriez-vous faire différemment cette semaine pour surmonter ces obstacles ?",
   "Une nouvelle semaine, une nouvelle occasion de faire les choses différemment et d'atteindre vos buts !",
   "À quel moment de la journée pourriez-vous prendre 10 minutes pour faire une petite marche ?",
@@ -56,7 +56,7 @@ FRENCH_TIPS_NOT_MET = [
   "Ajoutez quelques pas tout en vous amusant ! Les quilles, la danse ou même une visite au musée vous aideront à augmenter naturellement votre nombre de pas. Quelle activité amusante pourriez-vous prévoir pour bouger davantage ?",
   "Écouter de la musique, écouter un podcast, discuter avec quelqu'un ou prendre du temps pour vous pendant que vous marchez. Qu'est-ce qui rendrait votre promenade plus agréable ?",
   "Une promenade de seulement 10 minutes après un repas présente plusieurs avantages pour la santé. Après quel repas pourriez-vous essayer cela ?",
-  "Où aimez-vous marcher ? Dans un parc, dans votre quartier préféré, dans la forêt ?",
+  "Où aimez-vous marcher ? Dans un parc, in your favorite neighborhood, dans la forêt ?",
   "Y a-t-il des moments dans votre semaine où vous pourriez marcher au lieu de prendre la voiture ? Quand cela pourrait-il être le cas ?",
   "Les petits changements s'additionnent : lorsque vous vous rendez quelque part en voiture, vous pourriez vous garer un peu plus loin de votre destination, ce qui vous obligerait à marcher davantage.",
   "Les petits changements s'additionnent : si vous ne travaillez de la maison, essayez d'aller voir un collègue au lieu de lui envoyer un courriel et éloignez votre téléphone afin de devoir vous lever pour répondre.",
@@ -82,6 +82,10 @@ FRENCH_TIPS_MET = [
   "On voit que vous faites des efforts pour atteindre vos buts.",
   "Bravo ! Vous atteignez vos objectifs."
 ]
+
+# Contact footers
+ENGLISH_FOOTER = "\n\nIf you would like to contact a member of the research team, please email us at partnerstept2d@muhc.mcgill.ca or call us at 438-346-0479"
+FRENCH_FOOTER = "\n\nSi vous souhaitez contacter un membre de l'équipe de recherche, veuillez nous envoyer un courriel à partnerstept2d@muhc.mcgill.ca ou nous appeler au 438-346-0479"
 
 def get_random_tip(language, goal_met):
     """
@@ -134,7 +138,8 @@ def create_email_content(participant, goal_data):
             tip = get_random_tip('en', None)
             message_lines.append(f"\n{tip}")
         
-        return subject, "\n".join(message_lines)
+        footer = FRENCH_FOOTER if language == 'fr' else ENGLISH_FOOTER
+        return subject, "\n".join(message_lines) + footer
     
     # Normal case with valid step data
     if language == 'fr':
@@ -167,7 +172,8 @@ def create_email_content(participant, goal_data):
         tip = get_random_tip('en', target_was_met)
         message_lines.append(f"\n{tip}")
     
-    return subject, "\n".join(message_lines)
+    footer = FRENCH_FOOTER if language == 'fr' else ENGLISH_FOOTER
+    return subject, "\n".join(message_lines) + footer
     
     
 def send_goal_notification(participant, goal_data):
@@ -222,7 +228,7 @@ def send_goal_notification(participant, goal_data):
                     message=message_body,
                     from_email=from_email,
                     recipient_list=cc_list,
-                    fail_silently=True,  # don’t break participant emails if CC fails
+                    fail_silently=True,  # don't break participant emails if CC fails
                 )
 
             result['success'] = True
