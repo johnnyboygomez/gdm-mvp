@@ -145,6 +145,7 @@ class ParticipantInline(ParticipantButtonMixin, admin.StackedInline):
         base_fields = [
             'start_date',
             'language',
+            'treatment_arm',
         ]
         
         # Data fields - different for Managers vs Superusers

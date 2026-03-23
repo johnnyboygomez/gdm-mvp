@@ -41,8 +41,17 @@ class Participant(models.Model):
         ('fr', 'Français'),
     ]
     
+    TREATMENT_ARM_CHOICES = [
+        (0, 'Control'),
+        (1, 'Intervention'),
+    ]
+    
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     start_date = models.DateField()
+    treatment_arm = models.IntegerField(
+        choices=TREATMENT_ARM_CHOICES,
+        help_text="Treatment arm assignment: 0=Control, 1=Intervention"
+    )
     daily_steps = models.JSONField(default=list, blank=True)
     targets = models.JSONField(default=dict, blank=True)
     device_sync_status = models.JSONField(default=dict, blank=True)
