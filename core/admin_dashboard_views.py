@@ -5,6 +5,7 @@ from django.shortcuts import render
 from django.http import Http404
 from .models import Participant
 from collections import defaultdict
+from .reports import generate_research_excel
 import json
     
 def get_next_target_day(start_date):
@@ -366,3 +367,33 @@ def calculate_weekly_summaries(participant):
     summaries.reverse()
     
     return summaries
+
+@staff_member_required
+
+def export_research_data_view(request):
+    """
+    View for exporting research data to Excel.
+    Shows form to select participant or all participants.
+    """
+    if request.method == 'POST':
+        participant_id = request.POST.get('participant_id')
+        
+        # Generate and return Excel file
+        if participant_id and participant_id != 'all':
+            return generate_research_excel(participant_id=int(participant_id))
+        else:
+            return generate_research_excel()
+    
+    # GET request - show the form
+    # Get all non-staff, non-superuser participants
+    participants = Participant.objects.select_related('user').filter(
+        user__is_staff=False,
+        user__is_superuser=False
+    ).order_by('user__email')
+    
+    context = {
+        'participants': participants,
+        'title': 'Export Research Data',
+    }
+    
+    return render(request, 'admin/export_research_data.html', context)

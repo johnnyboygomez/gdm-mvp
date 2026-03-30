@@ -1,0 +1,63 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | PartnerStep{% endblock %}
+
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">PartnerStep Administration</a></h1>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'export_research_data' %}">Reports</a>
+    &rsaquo; Export Research Data
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <div class="module">
+        <h2>Export Step Data to Excel</h2>
+        
+        <p style="margin: 20px 0;">
+            This exports daily step data and weekly targets for participants. 
+            Staff and superuser accounts are automatically excluded from the export.
+        </p>
+        
+        <form method="post" style="margin: 20px 0;">
+            {% csrf_token %}
+            
+            <div class="form-row">
+                <div>
+                    <label for="participant_id" style="display: block; margin-bottom: 8px; font-weight: bold;">
+                        Select Participant:
+                    </label>
+                    <select name="participant_id" id="participant_id" style="width: 400px; padding: 8px; font-size: 14px;">
+                        <option value="all">All Participants ({{ participants.count }})</option>
+                        {% for participant in participants %}
+                            <option value="{{ participant.id }}">
+                                {{ participant.user.email }} (ID: {{ participant.id }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="submit-row" style="margin-top: 20px;">
+                <input type="submit" value="Download Excel File" class="default" style="padding: 10px 20px; font-size: 14px;">
+            </div>
+        </form>
+        
+        <div style="margin-top: 30px; padding: 15px; background-color: #f8f8f8; border-left: 4px solid #417690;">
+            <h3 style="margin-top: 0;">Export Details</h3>
+            <ul style="margin: 10px 0;">
+                <li>File format: Excel (.xlsx)</li>
+                <li>Includes: Daily step data, weekly targets, goal tracking</li>
+                <li>Two sheets: Research Data + Data Dictionary</li>
+                <li>Filename includes timestamp to prevent overwriting</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
