@@ -124,17 +124,22 @@ def generate_research_excel(participant_id=None):
             else:
                 prev_target = None
             
-            # Determine if goal was reached
+			# Determine if goal was reached
             if week_num == 1:
                 reached_goal = 'NA'
             elif prev_target and target_data:
                 average_from_target = target_data.get('average_steps', avg_steps)
-                reached_goal = 'Yes' if average_from_target >= prev_target else 'No'
+                # Ensure both values are integers for comparison
+                try:
+                    avg_int = int(average_from_target)
+                    target_int = int(prev_target)
+                    reached_goal = 'Yes' if avg_int >= target_int else 'No'
+                except (ValueError, TypeError):
+                    reached_goal = 'NA'
             elif not target_data:
                 reached_goal = '4'  # Not enough valid dates
             else:
-                reached_goal = 'NA'
-            
+                reached_goal = 'NA'            
             # Get increment
             if target_data:
                 increment = target_data.get('increase', '')
