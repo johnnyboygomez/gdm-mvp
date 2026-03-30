@@ -20,3 +20,4 @@ settings_local.py
 # Test data or CSVs if not needed in repo
 *.csv
 *.json
+.DS_Store
